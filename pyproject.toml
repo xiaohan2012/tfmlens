@@ -8,6 +8,8 @@ license = { text = "MIT" }
 authors = [{ name = "Han Xiao", email = "xiaohan2012@gmail.com" }]
 dependencies = [
     "torch>=2.4",
+    "numpy",
+    "einops",
 ]
 
 [build-system]
@@ -38,6 +40,8 @@ torch = [{ index = "pytorch-cpu" }]
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+# Vendored upstream code (Apache-2.0) is kept byte-for-byte; don't lint/format it.
+extend-exclude = ["src/tfm_lens/vendor"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
