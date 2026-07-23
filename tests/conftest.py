@@ -4,6 +4,8 @@ The toy adapter and a sample input are reused across the adapter / capture /
 interventions / logit_lens tests, so they live here rather than in one file.
 """
 
+from copy import deepcopy
+
 import pytest
 import torch
 
@@ -18,3 +20,9 @@ def toy_adapter() -> ToyAdapter:
 @pytest.fixture
 def toy_input() -> torch.Tensor:
     return torch.randn(2, 5, ToyAdapter.HIDDEN)  # (batch, seq, hidden)
+
+
+@pytest.fixture
+def toy_decoders(toy_adapter: ToyAdapter) -> list:
+    # one decoder per capture depth: n_layers + 1 (see capture cache length).
+    return [deepcopy(toy_adapter.decoder_template()) for _ in range(toy_adapter.n_layers + 1)]
