@@ -1,0 +1,23 @@
+Vendored LimiX model definition
+================================
+
+The files in this directory are vendored (copied) from the LimiX project:
+
+  Repository: https://github.com/limix-ldm-ai/LimiX
+  Commit:     61ede97e37d3eaae9e4500c0bba02965a2370eba
+  License:    Apache License 2.0 (see LICENSE.txt)
+
+Vendored files (upstream path -> here):
+  model/transformer.py -> transformer.py
+  model/layer.py       -> layer.py
+  model/encoders.py    -> encoders.py
+  utils/loading.py     -> loading.py
+
+Only change from upstream: internal absolute imports (`from model.…`,
+`from utils.…`) were rewritten to relative imports (`from .…`) so the code lives
+under `tfm_lens.vendor.limix` without polluting the top-level namespace. The file
+contents are otherwise unmodified, pinned to the commit above for reproducibility.
+
+We reproduce Exp4/5/6 of "Is One Layer Enough?" against the LimiX-2M checkpoint;
+the checkpoint weights are NOT vendored — download them from
+https://huggingface.co/stableai-org/LimiX-2M .
