@@ -9,6 +9,13 @@ Write unit tests according to the following requirement.
 
 # Guidelines on writing unit tests
 
+## What not to test — keep it to the point
+
+- **Test behaviour, not implementation details.** Assert the observable result of a function, not how it computes it internally.
+- **Don't test the language or the framework.** Checks like "is the returned list really a `list`?" are near-tautologies — low signal, drop them.
+- **One concept per test.** Keep each test focused on a single behaviour instead of packing unrelated assertions into one.
+- **Few high-signal tests beat exhaustive enumeration.** Cover representative behaviours and boundaries; collapse repetitive cases with `parametrize` rather than adding tests for their own sake.
+
 ## Use of mocks
 
 ✅ Mock when:
@@ -63,6 +70,8 @@ def test_train_model_step(
 
 
 ## Group related unit tests under one class
+
+**Rule:** Group tests under a class as soon as a target function/class has **two or more** tests. A target with a **single** test can stay a flat function — don't add a class for its own sake.
 
 ✅ The recommended way
 
@@ -142,46 +151,45 @@ def test_foo_case_3() -> None:
           process_data(input_value)
 ```
 
-## Reuse test data
+## Share setup with fixtures
 
-- Try defining shared test data at the class level, to make tests more concise.
-- To ensure immutability, define the shared data as class properties
+Use pytest **fixtures** for shared setup (put cross-file fixtures in `conftest.py`).
+Plain immutable constants can live as class attributes, but anything that has to
+be *constructed* — objects, state — should come from a fixture. Each test then
+gets a fresh instance, so tests stay isolated and don't leak state into one another.
 
-❌ The undesirable way
+❌ The undesirable way — rebuilding the same object in every test
 
 ```python
-from typing import Dict, List, Any
-
 class TestFoo:
     def test_case_1(self) -> None:
-        test_data = {"key": "value", "items": [1, 2, 3]}
+        data = {"key": "value", "items": [1, 2, 3]}
         # test logic...
 
     def test_case_2(self) -> None:
-        # Same mock data duplicated again
-        test_data = {"key": "value", "items": [1, 2, 3]}
+        # Same data duplicated again
+        data = {"key": "value", "items": [1, 2, 3]}
         # test logic...
 ```
 
-✅ The recommended way
+✅ The recommended way — a fixture injected per test
 
 ```python
-from typing import Dict, List, Any
+import pytest
+
+
+@pytest.fixture
+def data() -> dict:
+    return {"key": "value", "items": [1, 2, 3]}
+
 
 class TestFoo:
-    # Define shared test data as class property, to ensure immutability
-    @property
-    def test_data(self) -> Dict[str, Any]:
-        return {"key": "value", "items": [1, 2, 3]}
-
-    def test_case_1(self) -> None:
-        # Reuse class attributes
-        result = some_function(self.test_data)
+    def test_case_1(self, data: dict) -> None:
+        result = some_function(data)
         # test logic...
 
-    def test_case_2(self) -> None:
-        # Same shared data, no duplication
-        result = some_function(self.test_data)
+    def test_case_2(self, data: dict) -> None:
+        result = some_function(data)
         # test logic...
 ```
 
@@ -237,4 +245,13 @@ When arrays are compared:
 ```python
 # ✅ use numpy utils
 numpy.testing.assert_allclose(x_arr, y_arr)
+```
+
+When torch tensors are compared:
+
+```python
+import torch.testing
+
+# ✅ more informative failures than torch.allclose
+torch.testing.assert_close(x, y)
 ```
