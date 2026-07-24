@@ -1,6 +1,5 @@
 """Per-layer decode + ROC-AUC on one table (evaluation.layerwise)."""
 
-import copy
 from pathlib import Path
 
 import numpy as np
@@ -8,7 +7,7 @@ import pytest
 import torch
 
 from tfm_lens.adapters.limix import LimixAdapter
-from tfm_lens.evaluation.layerwise import layerwise_auc, predict_layers
+from tfm_lens.evaluation.layerwise import layerwise_auc, load_decoders, predict_layers
 from toys import ToyAdapter3D
 
 TRAINED_DECODERS = Path("weights/limix_2m")
@@ -36,18 +35,20 @@ def test_layerwise_auc_scores_each_depth():
 
 
 @pytest.mark.skipif(not TRAINED_DECODERS.exists(), reason="no trained decoders at weights/limix_2m")
+def test_load_decoders_returns_one_per_depth(limix_model):
+    adapter = LimixAdapter(limix_model)
+    decoders = load_decoders(TRAINED_DECODERS, adapter)
+    assert len(decoders) == adapter.n_layers + 1  # one decoder per capture depth
+
+
+@pytest.mark.skipif(not TRAINED_DECODERS.exists(), reason="no trained decoders at weights/limix_2m")
 def test_predict_layers_real_limix_builds_up_with_depth(limix_model):
     # real LimiX + the fine-tuned decoders on a separable binary table: per-layer
     # AUC should climb with depth (the paper's logit-lens story), proving the
     # trained decoders plug into the eval pipeline unchanged.
     adapter = LimixAdapter(limix_model)
     n = adapter.n_layers + 1
-    decoders = []
-    for layer in range(n):
-        d = copy.deepcopy(adapter.decoder_template())
-        state = torch.load(TRAINED_DECODERS / f"decoder_layer_{layer}.pth", map_location="cpu")
-        d.load_state_dict(state)
-        decoders.append(d)
+    decoders = load_decoders(TRAINED_DECODERS, adapter)
 
     torch.manual_seed(0)
     f = 5

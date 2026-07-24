@@ -8,6 +8,9 @@ depth against the true test labels. ``predict_layers`` is the model-heavy half;
 wrap ``predict_layers`` in ``skip_layer`` to get the intervened trajectory.
 """
 
+from copy import deepcopy
+from pathlib import Path
+
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -16,6 +19,22 @@ from sklearn.metrics import roc_auc_score
 from tfm_lens.adapters.base import ModelAdapter
 from tfm_lens.core.capture import capture_layers
 from tfm_lens.core.logit_lens import logit_lens
+
+
+def load_decoders(path: str | Path, adapter: ModelAdapter) -> list[torch.nn.Module]:
+    """One fine-tuned decoder per capture depth, from ``path/decoder_layer_{i}.pth``.
+
+    Deep-copies the adapter's decoder template (``decoder_template`` returns the
+    single shared module) so each depth gets an independent instance, then loads
+    its trained weights. Returns ``n_layers + 1`` decoders, ordered by depth.
+    """
+    path = Path(path)
+    decoders = []
+    for i in range(adapter.n_layers + 1):
+        d = deepcopy(adapter.decoder_template())
+        d.load_state_dict(torch.load(path / f"decoder_layer_{i}.pth", map_location="cpu"))
+        decoders.append(d)
+    return decoders
 
 
 def predict_layers(
