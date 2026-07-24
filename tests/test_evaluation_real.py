@@ -26,10 +26,12 @@ from tfm_lens.evaluation.layerwise import layerwise_auc, predict_layers  # noqa:
 from tfm_lens.evaluation.preprocess import limix_preprocess  # noqa: E402
 
 
-def test_real_tabarena_task_native_decode_beats_chance(limix_model):
-    # a real OpenML binary task through the full eval pipeline; the model's own
-    # decoder at the final layer must score above chance, proving preprocessing
-    # + forward + decode work on real data.
+def test_eval_pipeline_end_to_end_on_real_table(limix_model):
+    # exercises the whole eval pipeline on a real OpenML task
+    # (load -> limix_preprocess -> predict_layers -> layerwise_auc). The model's
+    # own decoder stands in for the fine-tuned probes so we can assert something
+    # real without checked-in weights: its final-layer decode must beat chance,
+    # proving preprocessing + forward + decode + scoring all work on real data.
     adapter = LimixAdapter(limix_model)
     native = adapter.decoder_template()
     decoders = [native] * (adapter.n_layers + 1)
