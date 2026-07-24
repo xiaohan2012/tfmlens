@@ -17,7 +17,7 @@ from tfm_lens.vendor.limix.preprocess import (
 )
 
 # worker ① of LimiX's cls_default_noretrieval.json
-_WORKER = {
+_WORKER_CONFIG = {
     "RebalanceFeatureDistribution": {
         "worker_tags": ["quantile_uniform_10"],
         "discrete_flag": False,
@@ -42,9 +42,9 @@ def limix_preprocess(X_train, y_train, X_test, categorical_idx, seed=0):
 
     steps = [
         FilterValidFeatures(),
-        RebalanceFeatureDistribution(**_WORKER["RebalanceFeatureDistribution"]),
-        CategoricalFeatureEncoder(**_WORKER["CategoricalFeatureEncoder"]),
-        FeatureShuffler(**_WORKER["FeatureShuffler"]),
+        RebalanceFeatureDistribution(**_WORKER_CONFIG["RebalanceFeatureDistribution"]),
+        CategoricalFeatureEncoder(**_WORKER_CONFIG["CategoricalFeatureEncoder"]),
+        FeatureShuffler(**_WORKER_CONFIG["FeatureShuffler"]),
     ]
     for step in steps:
         x, cat = step.fit_transform(x, cat, seed, y=y)

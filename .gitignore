@@ -21,6 +21,7 @@ htmlcov/
 *.pth
 *.pt
 *.ckpt
+weights/
 
 # OS / editor
 .DS_Store

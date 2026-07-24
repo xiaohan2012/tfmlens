@@ -11,7 +11,7 @@ import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 
 # TabArena binary tasks (from the reference experiment's BENCHMARK_TASK_IDS).
-TABARENA_BINARY = [
+TABARENA_BINARY_TASK_IDS = [
     363621,
     363671,
     363696,
