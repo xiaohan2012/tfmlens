@@ -43,6 +43,7 @@ eval = [
     "numba>=0.60",  # kditransform pulls numba; pin forward so it doesn't
                     # backtrack to a pre-3.12 llvmlite that fails to build
     "pandas",  # vendored data_utils / OpenML tables
+    "openml",  # TabArena task loading
 ]
 
 # Pull torch from the CPU-only wheel index so CI (and local) stays light and
