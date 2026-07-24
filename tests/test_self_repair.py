@@ -3,7 +3,7 @@
 import numpy as np
 import torch
 
-from tfm_lens.evaluation.self_repair import ablation_sweep, native_final_auc, self_repair_points
+from tfm_lens.evaluation.self_repair import ablation_diffs, ablation_sweep, native_final_auc
 from toys import ToyAdapter3D
 
 
@@ -36,11 +36,11 @@ def test_native_final_auc_is_a_score(toy_adapter):
     assert 0.0 <= auc <= 1.0
 
 
-def test_self_repair_points_one_per_ablated_layer(toy_adapter, toy_decoders):
+def test_ablation_diffs_one_per_ablated_layer(toy_adapter, toy_decoders):
     Xtr, ytr, Xte, yte = _toy_table()
-    pts = self_repair_points(toy_adapter, toy_decoders, Xtr, ytr, Xte, yte, n_classes=2)
-    assert len(pts) == toy_adapter.n_layers  # one point per ablated layer
-    for m, immediate, final in pts:
+    diffs = ablation_diffs(toy_adapter, toy_decoders, Xtr, ytr, Xte, yte, n_classes=2)
+    assert len(diffs) == toy_adapter.n_layers  # one row per ablated layer
+    for m, immediate, final in diffs:
         assert isinstance(m, int)
         assert isinstance(immediate, float)
         assert isinstance(final, float)
