@@ -35,6 +35,15 @@ dev = [
     "ruff>=0.6",
     "huggingface-hub",  # fetch the LimiX-2M ckpt for the integration test
 ]
+# Exp5/6 evaluation on real tables: LimiX's vendored preprocessing needs
+# kditransform; OpenML task loading (added in the eval data module) needs openml.
+# Kept out of core so training / CI stay light — install with `uv sync --group eval`.
+eval = [
+    "kditransform",
+    "numba>=0.60",  # kditransform pulls numba; pin forward so it doesn't
+                    # backtrack to a pre-3.12 llvmlite that fails to build
+    "pandas",  # vendored data_utils / OpenML tables
+]
 
 # Pull torch from the CPU-only wheel index so CI (and local) stays light and
 # cross-platform. `explicit = true` means only packages routed here via
