@@ -52,6 +52,10 @@ class ToyAdapter3D(ModelAdapter):
     def decoder_template(self):
         return nn.Linear(self.HIDDEN, self.N_CLASSES)
 
+    def to(self, device):
+        self.backbone = self.backbone.to(device)
+        return self
+
 
 class ToyBlock4D(nn.Module):
     """A 4D layer: operates on [batch, seq, tokens, hidden] and returns a 3-tuple,
@@ -100,6 +104,10 @@ class ToyAdapter4D(ModelAdapter):
 
     def decoder_template(self):
         return nn.Linear(self.HIDDEN, self.N_CLASSES)
+
+    def to(self, device):
+        self.backbone = self.backbone.to(device)
+        return self
 
     def select_label_token(self, emb):
         return emb[:, :, -1, :]  # 4D -> 3D: keep the label token

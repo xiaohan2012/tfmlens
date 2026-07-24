@@ -6,9 +6,6 @@ decoder updates. The backbone is frozen; only the deepcopied decoders train.
 Faithful to the reference recipe: the macro-batch is forwarded through the
 (memory-heavy) backbone in ``micro_batch_size`` chunks, then each decoder is
 updated on ``training_batch_size`` chunks of the collected test-row embeddings.
-
-Note: the adapter's model is used on ``config.device`` as-is — put it on that
-device before wrapping it (the tests run on CPU).
 """
 
 import copy
@@ -53,6 +50,7 @@ def _save(out_dir: Path, decoders: list[nn.Module], loss_per_step: list) -> None
 def finetune_decoders(adapter: ModelAdapter, config: TrainConfig, prior=None) -> list[nn.Module]:
     seed_everything(config.seed)
     device = config.device
+    adapter.to(device)  # co-locate the frozen backbone with decoders and inputs
     out_dir = Path(config.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     config.save_snapshot(out_dir)

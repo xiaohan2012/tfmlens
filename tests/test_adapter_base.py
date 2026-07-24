@@ -41,6 +41,12 @@ class TestModelAdapter:
         x = torch.randn(2, ToyAdapter3D.HIDDEN)
         torch.testing.assert_close(toy_adapter.post_norm(x), x)
 
+    def test_to_is_chainable_and_moves_the_backbone(self, toy_adapter):
+        # finetune_decoders co-locates the frozen backbone with the decoders and
+        # inputs on config.device via this; it must move params and return self.
+        assert toy_adapter.to("cpu") is toy_adapter
+        assert all(p.device.type == "cpu" for p in toy_adapter.layers[0].parameters())
+
     def test_incomplete_subclass_cannot_instantiate(self):
         # the mold's teeth: a subclass missing an abstractmethod can't be built,
         # so no adapter can silently skip something a downstream module needs.

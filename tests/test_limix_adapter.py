@@ -30,6 +30,12 @@ def table():
 
 
 class TestLimixAdapterIntegration:
+    def test_from_checkpoint_loads_on_requested_device(self, limix_ckpt):
+        # the device bug: load_model lands on CPU; from_checkpoint must move the
+        # model to the requested device so GPU runs don't hit a device mismatch.
+        adapter = LimixAdapter.from_checkpoint(limix_ckpt, device="cpu")
+        assert all(p.device.type == "cpu" for p in adapter.model.parameters())
+
     def test_layers(self, limix_adapter):
         assert limix_adapter.n_layers == 12
 
