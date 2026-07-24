@@ -2,7 +2,8 @@
 
 A few ``nn.Linear`` "layers" are enough to exercise every seam (capture hooks,
 forward-swap interventions, per-layer decoding) with no GPU and no LimiX
-checkpoint. capture / interventions / logit_lens tests all reuse ``ToyAdapter``.
+checkpoint. ``ToyAdapter3D`` covers the 3D residual family (TabPFN-v1 / TabICL);
+``ToyAdapter4D`` covers the 4D family (LimiX / TabPFN-v2).
 """
 
 import torch
@@ -11,7 +12,7 @@ import torch.nn as nn
 from tfm_lens.adapters.base import ModelAdapter
 
 
-class ToyBackbone(nn.Module):
+class ToyBackbone3D(nn.Module):
     """N independent Linear "layers" applied in sequence.
 
     Each block is its own ``nn.Module`` so a forward hook can read its output
@@ -28,8 +29,8 @@ class ToyBackbone(nn.Module):
         return x
 
 
-class ToyAdapter(ModelAdapter):
-    """Minimal 3D ModelAdapter over ToyBackbone (TabPFN-v1 / TabICL family)."""
+class ToyAdapter3D(ModelAdapter):
+    """Minimal 3D ModelAdapter over ToyBackbone3D (TabPFN-v1 / TabICL family)."""
 
     needs_transpose = False
 
@@ -38,7 +39,7 @@ class ToyAdapter(ModelAdapter):
     N_LAYERS = 3
 
     def __init__(self):
-        self.backbone = ToyBackbone(n_layers=self.N_LAYERS, hidden=self.HIDDEN)
+        self.backbone = ToyBackbone3D(n_layers=self.N_LAYERS, hidden=self.HIDDEN)
 
     @property
     def layers(self):

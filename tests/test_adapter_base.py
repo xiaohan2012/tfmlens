@@ -9,7 +9,7 @@ import pytest
 import torch
 
 from tfm_lens.adapters.base import ModelAdapter
-from toys import ToyAdapter
+from toys import ToyAdapter3D
 
 
 class TestModelAdapter:
@@ -33,12 +33,12 @@ class TestModelAdapter:
     def test_decoder_template_maps_hidden_to_classes(self, toy_adapter):
         # logit_lens / training deepcopy this head; it must map hidden -> n_classes.
         decoder = toy_adapter.decoder_template()
-        out = decoder(torch.randn(2, ToyAdapter.HIDDEN))
-        assert out.shape == (2, ToyAdapter.N_CLASSES)
+        out = decoder(torch.randn(2, ToyAdapter3D.HIDDEN))
+        assert out.shape == (2, ToyAdapter3D.N_CLASSES)
 
     def test_post_norm_defaults_to_identity(self, toy_adapter):
         # logit_lens applies post_norm before decoding; the default must be a no-op.
-        x = torch.randn(2, ToyAdapter.HIDDEN)
+        x = torch.randn(2, ToyAdapter3D.HIDDEN)
         torch.testing.assert_close(toy_adapter.post_norm(x), x)
 
     def test_incomplete_subclass_cannot_instantiate(self):

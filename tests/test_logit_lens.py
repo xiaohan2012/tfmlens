@@ -11,14 +11,14 @@ import torch.nn as nn
 
 from tfm_lens.core.capture import capture_layers
 from tfm_lens.core.logit_lens import logit_lens
-from toys import ToyAdapter, ToyAdapter4D
+from toys import ToyAdapter3D, ToyAdapter4D
 
 
 class TestLogitLens:
     @pytest.mark.parametrize(
         "adapter_fx, input_fx, decoders_fx, n_classes",
         [
-            ("toy_adapter", "toy_input", "toy_decoders", ToyAdapter.N_CLASSES),
+            ("toy_adapter", "toy_input", "toy_decoders", ToyAdapter3D.N_CLASSES),
             ("toy_adapter_4d", "toy_input_4d", "toy_decoders_4d", ToyAdapter4D.N_CLASSES),
         ],
     )
@@ -49,11 +49,11 @@ class TestLogitLens:
         torch.testing.assert_close(h, torch.full((1, 3, hidden), float(tokens - 1)))
 
     def test_post_norm_applied(self):
-        class DoublingAdapter(ToyAdapter):
+        class DoublingAdapter(ToyAdapter3D):
             def post_norm(self, emb):
                 return emb * 2
 
         adapter = DoublingAdapter()
-        emb = torch.ones(1, 3, ToyAdapter.HIDDEN)  # (batch, seq, hidden)
+        emb = torch.ones(1, 3, ToyAdapter3D.HIDDEN)  # (batch, seq, hidden)
         out = logit_lens([emb], [nn.Identity()], adapter, eval_pos=0)[0]
-        torch.testing.assert_close(out, torch.full((1, 3, ToyAdapter.HIDDEN), 2.0))
+        torch.testing.assert_close(out, torch.full((1, 3, ToyAdapter3D.HIDDEN), 2.0))

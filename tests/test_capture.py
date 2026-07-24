@@ -7,7 +7,7 @@ embedding plus each layer's output), stores it raw, and cleans up its hooks.
 import torch
 
 from tfm_lens.core.capture import capture_layers
-from toys import ToyAdapter
+from toys import ToyAdapter3D
 
 
 class TestCaptureLayers:
@@ -15,7 +15,7 @@ class TestCaptureLayers:
         with capture_layers(toy_adapter) as cache:
             toy_adapter.forward_frozen(toy_input, None, 5)
         assert len(cache) == toy_adapter.n_layers + 1 == 4
-        assert all(t.shape == (2, 5, ToyAdapter.HIDDEN) for t in cache)
+        assert all(t.shape == (2, 5, ToyAdapter3D.HIDDEN) for t in cache)
 
     def test_empty_before_forward_filled_after(self, toy_adapter, toy_input):
         with capture_layers(toy_adapter) as cache:
