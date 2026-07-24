@@ -1,4 +1,4 @@
-"""Block 2 — capture_layers.
+"""capture_layers.
 
 Captures the residual stream at every depth (n_layers + 1 taps: the input
 embedding plus each layer's output), stores it raw, and cleans up its hooks.

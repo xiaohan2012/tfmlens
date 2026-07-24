@@ -1,0 +1,4 @@
+# LimiX-2M finetune config — only the differences from the defaults
+# (defaults in tfm_lens/finetune/config.py are the paper's verified recipe:
+# mix_scm prior, 200 steps, AdamW(3e-5, 1e-4), etc.). device auto-detects.
+out_dir: weights/extras/limix_2m
