@@ -24,6 +24,9 @@ class PriorConfig(BaseModel):
     max_train_size: float = 0.9
     batch_size_per_gp: int = 4
     log_seq_len: bool = False
+    # -1 keeps joblib's "all cores" meaning, but the vendored prior only
+    # parallelizes when n_jobs > 1, so -1 runs serial. Override per-machine with
+    # a positive int (see configs/limix_2m.yaml).
     n_jobs: int = -1
 
     @field_validator("mix_probs")

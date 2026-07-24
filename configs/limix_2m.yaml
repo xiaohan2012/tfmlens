@@ -2,3 +2,10 @@
 # (defaults in tfm_lens/finetune/config.py are the paper's verified recipe:
 # mix_scm prior, 200 steps, AdamW(3e-5, 1e-4), etc.). device auto-detects.
 out_dir: weights/extras/limix_2m
+prior:
+  # Keep this a positive int. The vendored TabICL prior gates parallel table
+  # generation on `n_jobs > 1`, so the joblib "-1 = all cores" convention
+  # silently falls back to single-core serial generation (~5x slower on a big
+  # box). 16 also keeps VRAM in budget: each loky worker holds a ~386 MiB CUDA
+  # context, so higher counts can OOM a 24 GB card alongside the model.
+  n_jobs: 16
