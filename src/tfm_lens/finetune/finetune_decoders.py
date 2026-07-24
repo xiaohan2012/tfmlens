@@ -13,7 +13,6 @@ device before wrapping it (the tests run on CPU).
 
 import copy
 import json
-import random
 from pathlib import Path
 
 import numpy as np
@@ -24,12 +23,7 @@ from tfm_lens.adapters.base import ModelAdapter
 from tfm_lens.core.capture import capture_layers
 from tfm_lens.data.prior import build_prior
 from tfm_lens.finetune.config import TrainConfig
-
-
-def _seed_everything(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
+from tfm_lens.utils import seed_everything
 
 
 def _readout(adapter: ModelAdapter, emb, eval_pos: int):
@@ -57,7 +51,7 @@ def _save(out_dir: Path, decoders: list[nn.Module], loss_per_step: list) -> None
 
 
 def finetune_decoders(adapter: ModelAdapter, config: TrainConfig, prior=None) -> list[nn.Module]:
-    _seed_everything(config.seed)
+    seed_everything(config.seed)
     device = config.device
     out_dir = Path(config.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -86,7 +80,10 @@ def finetune_decoders(adapter: ModelAdapter, config: TrainConfig, prior=None) ->
             with torch.no_grad(), capture_layers(adapter) as cache:
                 adapter.forward_frozen(xb.to(device), yb[:, :eval_pos], eval_pos)
             for i, emb in enumerate(cache):
-                layer_embs[i].append(_readout(adapter, emb, eval_pos).cpu())
+                # Park the readout on readout_device: "cpu" offloads to keep GPU
+                # peak low (portable), or the compute device to stay resident and
+                # skip the round-trip when VRAM is ample (faster).
+                layer_embs[i].append(_readout(adapter, emb, eval_pos).to(config.readout_device))
         embeddings = [torch.cat(chunks, dim=0) for chunks in layer_embs]
         targets = y[:, eval_pos:].long()
 
@@ -109,7 +106,14 @@ def finetune_decoders(adapter: ModelAdapter, config: TrainConfig, prior=None) ->
 
 
 def _update_decoder(
-    decoder, optimizer, criterion, emb, targets, config, needs_transpose, device
+    decoder: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    criterion: nn.Module,
+    emb: torch.Tensor,
+    targets: torch.Tensor,
+    config: TrainConfig,
+    needs_transpose: bool,
+    device: str,
 ) -> list[float]:
     losses: list[float] = []
     for b in range(0, emb.shape[0], config.training_batch_size):

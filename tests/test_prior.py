@@ -1,4 +1,4 @@
-"""Block 6 — smoke test for the vendored TabICL prior.
+"""Smoke test for the vendored TabICL prior.
 
 It's copied upstream code, so this only checks it *runs* and yields a sane
 synthetic table. Uses ``mlp_scm`` (deterministic, no xgboost) to stay fast and

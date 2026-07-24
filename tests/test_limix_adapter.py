@@ -1,4 +1,4 @@
-"""Block 5 — LimixAdapter integration (needs the LimiX-2M ckpt).
+"""LimixAdapter integration (needs the LimiX-2M ckpt).
 
 Runs the real frozen LimiX through capture / skip / logit_lens to prove the
 abstraction that worked on the toys also holds on a real 4D model. Skipped when

@@ -1,4 +1,4 @@
-"""Block 7 — finetune_decoders.
+"""finetune_decoders.
 
 Loop mechanics are tested on the toy adapter with injected data (fast, always
 runs). The real path (LimiX + mix_scm prior) runs end-to-end on Linux CI and is
@@ -15,49 +15,62 @@ from tfm_lens.finetune.finetune_decoders import finetune_decoders
 from toys import ToyAdapter3D
 
 
-def _toy_prior(steps, batch=4, seq=6, eval_pos=4):
-    """Yield (X, y, eval_pos) macro-batches shaped for the toy (already hidden-space)."""
-    for _ in range(steps):
-        X = torch.randn(batch, seq, ToyAdapter3D.HIDDEN)
-        y = torch.randint(0, ToyAdapter3D.N_CLASSES, (batch, seq)).float()
-        yield X, y, eval_pos
+@pytest.fixture
+def toy_prior():
+    """Factory for (X, y, eval_pos) macro-batches shaped for the toy (hidden-space)."""
+
+    def _make(steps, batch=4, seq=6, eval_pos=4):
+        for _ in range(steps):
+            X = torch.randn(batch, seq, ToyAdapter3D.HIDDEN)
+            y = torch.randint(0, ToyAdapter3D.N_CLASSES, (batch, seq)).float()
+            yield X, y, eval_pos
+
+    return _make
 
 
-def _toy_config(out_dir, **kw):
-    kw = {
-        "max_steps": 3,
-        "prior_batch_size": 4,
-        "micro_batch_size": 4,
-        "training_batch_size": 4,
-        "save_every": 1,
-        "device": "cpu",
-        **kw,
-    }
-    return TrainConfig(out_dir=out_dir, **kw)
+@pytest.fixture
+def toy_config():
+    """Factory for a fast CPU TrainConfig with toy-sized batches."""
+
+    def _make(out_dir, **kw):
+        kw = {
+            "max_steps": 3,
+            "prior_batch_size": 4,
+            "micro_batch_size": 4,
+            "training_batch_size": 4,
+            "save_every": 1,
+            "device": "cpu",
+            **kw,
+        }
+        return TrainConfig(out_dir=out_dir, **kw)
+
+    return _make
 
 
 class TestFinetuneDecoders:
-    def test_produces_and_saves_a_decoder_per_depth(self, tmp_path):
+    def test_produces_and_saves_a_decoder_per_depth(self, tmp_path, toy_config, toy_prior):
         adapter = ToyAdapter3D()
-        cfg = _toy_config(tmp_path)
-        decoders = finetune_decoders(adapter, cfg, prior=_toy_prior(cfg.max_steps))
+        cfg = toy_config(tmp_path)
+        decoders = finetune_decoders(adapter, cfg, prior=toy_prior(cfg.max_steps))
         assert len(decoders) == adapter.n_layers + 1 == 4
         for i in range(adapter.n_layers + 1):
             assert (tmp_path / f"decoder_layer_{i}.pth").exists()
         assert (tmp_path / "loss_per_step.json").exists()
         assert (tmp_path / "config.json").exists()
 
-    def test_seed_makes_it_reproducible(self, tmp_path):
+    def test_seed_makes_it_reproducible(self, tmp_path, toy_config, toy_prior):
         adapter = ToyAdapter3D()  # shared frozen backbone
-        batches = list(_toy_prior(3))  # identical data for both runs
+        batches = list(toy_prior(3))  # identical data for both runs
 
         def run(sub):
             return finetune_decoders(
-                adapter, _toy_config(tmp_path / sub, seed=0), prior=iter(batches)
+                adapter, toy_config(tmp_path / sub, seed=0), prior=iter(batches)
             )
 
-        for a, b in zip(run("a"), run("b"), strict=True):
-            for pa, pb in zip(a.parameters(), b.parameters(), strict=True):
+        a = run("a")
+        b = run("b")
+        for da, db in zip(a, b, strict=True):
+            for pa, pb in zip(da.parameters(), db.parameters(), strict=True):
                 torch.testing.assert_close(pa, pb)
 
     @pytest.mark.skipif(

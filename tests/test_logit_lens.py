@@ -1,4 +1,4 @@
-"""Block 4/5 — logit_lens across the 3D and 4D residual families.
+"""logit_lens across the 3D and 4D residual families.
 
 The same logit_lens must handle both the toy (3D, [batch, seq, hidden]) and the
 4D family (LimiX / TabPFN v2, [batch, seq, tokens, hidden]); the model-specific

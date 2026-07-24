@@ -1,4 +1,4 @@
-"""Block 3 — skip_layer.
+"""skip_layer.
 
 Temporarily makes a layer the identity, and must restore the original forward on
 exit — including when the body raises. Verified through capture.

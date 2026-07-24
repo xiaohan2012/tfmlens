@@ -7,9 +7,10 @@ differences; every run saves a config.json snapshot so it is self-describing.
 from pathlib import Path
 from typing import Literal
 
-import torch
 import yaml
 from pydantic import BaseModel, Field, field_validator
+
+from tfm_lens.utils import default_device
 
 
 class PriorConfig(BaseModel):
@@ -31,10 +32,6 @@ class PriorConfig(BaseModel):
         if abs(sum(v) - 1.0) > 1e-6:
             raise ValueError(f"mix_probs must sum to 1, got {v}")
         return v
-
-
-def _default_device() -> str:
-    return "cuda" if torch.cuda.is_available() else "cpu"
 
 
 class TrainConfig(BaseModel):
@@ -59,7 +56,13 @@ class TrainConfig(BaseModel):
     save_every: int = 100
     wandb: bool = False
 
-    device: str = Field(default_factory=_default_device)
+    device: str = Field(default_factory=default_device)
+    # Where the frozen backbone's captured residuals are held between the
+    # collect and train phases. "cpu" (default) offloads the whole macro-batch
+    # so GPU peak scales only with micro/training batches — safe on small cards.
+    # Set to the compute device (e.g. "cuda") to keep them resident and skip the
+    # GPU<->CPU round-trip when VRAM is ample (faster, but uses more of it).
+    readout_device: str = "cpu"
 
     @classmethod
     def from_yaml(cls, path) -> "TrainConfig":

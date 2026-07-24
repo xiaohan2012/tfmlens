@@ -1,4 +1,4 @@
-"""Block 7 — TrainConfig (pydantic): defaults, validation, YAML override, snapshot."""
+"""TrainConfig (pydantic): defaults, validation, YAML override, snapshot."""
 
 import json
 
@@ -30,6 +30,10 @@ class TestTrainConfig:
     def test_device_autodetects(self, tmp_path):
         cfg = TrainConfig(out_dir=tmp_path)
         assert cfg.device == ("cuda" if torch.cuda.is_available() else "cpu")
+
+    def test_readout_device_defaults_to_cpu_and_overrides(self, tmp_path):
+        assert TrainConfig(out_dir=tmp_path).readout_device == "cpu"
+        assert TrainConfig(out_dir=tmp_path, readout_device="cuda").readout_device == "cuda"
 
     def test_yaml_override_keeps_other_defaults(self, tmp_path):
         (tmp_path / "c.yaml").write_text("out_dir: out\nmax_steps: 5\nprior:\n  max_features: 10\n")

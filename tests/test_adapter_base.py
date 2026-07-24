@@ -1,4 +1,4 @@
-"""Block 1 — the ModelAdapter contract.
+"""The ModelAdapter contract.
 
 Each test pins a property some downstream module (capture / interventions /
 logit_lens / training) will rely on; the comment names which one. capture etc.
