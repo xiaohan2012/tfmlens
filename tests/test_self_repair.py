@@ -3,8 +3,15 @@
 import numpy as np
 import torch
 
-from tfm_lens.evaluation.self_repair import ablation_sweep
+from tfm_lens.evaluation.self_repair import ablation_sweep, native_final_auc, self_repair_points
 from toys import ToyAdapter3D
+
+
+def _toy_table():
+    f = ToyAdapter3D.HIDDEN
+    X_train, y_train = torch.randn(6, f), torch.tensor([0.0, 1.0, 0.0, 1.0, 0.0, 1.0])
+    X_test, y_test = torch.randn(4, f), np.array([0, 1, 0, 1])
+    return X_train, y_train, X_test, y_test
 
 
 def test_ablation_sweep_returns_baseline_and_per_layer_trajectories(toy_adapter, toy_decoders):
@@ -20,3 +27,20 @@ def test_ablation_sweep_returns_baseline_and_per_layer_trajectories(toy_adapter,
     for traj in res["skip"].values():
         assert len(traj) == n_depths
     assert all(0.0 <= a <= 1.0 for a in res["baseline"])
+
+
+def test_native_final_auc_is_a_score(toy_adapter):
+    X_train, y_train, X_test, y_test = _toy_table()
+    auc = native_final_auc(toy_adapter, X_train, y_train, X_test, y_test, n_classes=2)
+    assert isinstance(auc, float)
+    assert 0.0 <= auc <= 1.0
+
+
+def test_self_repair_points_one_per_ablated_layer(toy_adapter, toy_decoders):
+    Xtr, ytr, Xte, yte = _toy_table()
+    pts = self_repair_points(toy_adapter, toy_decoders, Xtr, ytr, Xte, yte, n_classes=2)
+    assert len(pts) == toy_adapter.n_layers  # one point per ablated layer
+    for m, immediate, final in pts:
+        assert isinstance(m, int)
+        assert isinstance(immediate, float)
+        assert isinstance(final, float)
