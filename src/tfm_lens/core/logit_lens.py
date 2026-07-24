@@ -7,13 +7,19 @@ transposed layout, and any pre-decoder normalization).
 """
 
 
-def logit_lens(cache, decoders, adapter):
-    """One prediction per depth. ``len(cache) == len(decoders) == n_layers + 1``."""
+def logit_lens(cache, decoders, adapter, eval_pos):
+    """One prediction per depth for the test rows (those at/after ``eval_pos``).
+
+    ``len(cache) == len(decoders) == n_layers + 1``. Each prediction is
+    ``[batch, n_test, n_classes]``.
+    """
     preds = []
     for emb, decoder in zip(cache, decoders, strict=True):
-        h = emb[:, adapter.label_token_index]
-        if adapter.needs_transpose:
-            h = h.transpose(0, 1)
+        h = adapter.select_label_token(emb)  # -> [batch, seq, hidden]
         h = adapter.post_norm(h)
-        preds.append(decoder(h))
+        h = h[:, eval_pos:]  # keep only the test rows
+        if adapter.needs_transpose:
+            preds.append(decoder(h.transpose(0, 1)).transpose(0, 1))
+        else:
+            preds.append(decoder(h))
     return preds

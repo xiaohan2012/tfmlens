@@ -16,8 +16,7 @@ import torch.nn as nn
 class ModelAdapter(ABC):
     """Adapts a frozen backbone into a per-layer-readable, intervenable object."""
 
-    # Capability declarations — static, overridden by subclasses as needed.
-    label_token_index: int | None = -1  # which token to read; None = not a label-token arch
+    # Capability declaration — static, overridden by subclasses as needed.
     needs_transpose: bool = False  # whether the decoder wants (seq, batch, hidden)
 
     # ---- must be implemented ----
@@ -34,10 +33,26 @@ class ModelAdapter(ABC):
     def decoder_template(self) -> nn.Module:
         """The backbone's decoder head, deepcopied into per-layer decoders."""
 
-    # ---- optional overrides ----
+    # ---- decode-path hooks (overridable; defaults suit 3D models) ----
+    def select_label_token(self, emb):
+        """Reduce a raw layer residual to [batch, seq, hidden].
+
+        3D models (TabPFN v1 / TabICL / the toy) are already [batch, seq, hidden]
+        -> identity. 4D models (LimiX / TabPFN v2) hold the label token on the
+        token axis and override this, e.g. ``return emb[:, :, -1, :]``.
+        """
+        return emb
+
     def post_norm(self, emb):
         """Normalization applied before the decoder; identity by default."""
         return emb
+
+    # ---- intervention hook (overridable; default suits single-output layers) ----
+    def identity_forward(self, x):
+        """What a skipped layer should return. Default passes ``x`` through; models
+        whose layers return a tuple override, e.g. ``return (x, None, None)``.
+        """
+        return x
 
     @property
     def n_layers(self) -> int:
