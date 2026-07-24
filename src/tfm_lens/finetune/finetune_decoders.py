@@ -76,7 +76,7 @@ def finetune_decoders(adapter: ModelAdapter, config: TrainConfig, prior=None) ->
             strict=True,
         ):
             with torch.no_grad(), capture_layers(adapter) as cache:
-                adapter.forward_frozen(xb.to(device), yb[:, :eval_pos], eval_pos)
+                adapter.forward_frozen(xb.to(device), yb[:, :eval_pos].to(device), eval_pos)
             for i, emb in enumerate(cache):
                 # Park the readout on readout_device: "cpu" offloads to keep GPU
                 # peak low (portable), or the compute device to stay resident and
