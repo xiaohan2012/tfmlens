@@ -10,6 +10,7 @@ updated on ``training_batch_size`` chunks of the collected test-row embeddings.
 
 import copy
 import json
+import time
 from pathlib import Path
 
 import numpy as np
@@ -30,11 +31,12 @@ def _readout(adapter: ModelAdapter, emb, eval_pos: int):
     return h[:, eval_pos:]
 
 
-def _log_step(step: int, total: int, layer_losses: list[float]) -> None:
+def _log_step(step: int, total: int, layer_losses: list[float], dt: float) -> None:
     n = len(layer_losses)
     mid = n // 2
     print(
-        f"step {step + 1:>4}/{total} | mean loss {np.nanmean(layer_losses):.3f} | "
+        f"[{time.strftime('%H:%M:%S')}] step {step + 1:>4}/{total} | {dt:5.1f}s | "
+        f"mean loss {np.nanmean(layer_losses):.3f} | "
         f"layer[0]={layer_losses[0]:.3f} layer[{mid}]={layer_losses[mid]:.3f} "
         f"layer[{n - 1}]={layer_losses[-1]:.3f}",
         flush=True,
@@ -67,6 +69,7 @@ def finetune_decoders(adapter: ModelAdapter, config: TrainConfig, prior=None) ->
 
     loss_per_step: list = []
     for step, (X, y, eval_pos) in zip(range(config.max_steps), prior, strict=False):
+        t_step = time.time()
         # 1) forward the macro-batch through the frozen backbone in micro-batches,
         #    collecting each layer's test-row readout (kept on CPU).
         layer_embs: list[list[torch.Tensor]] = [[] for _ in range(n_dec)]
@@ -95,7 +98,7 @@ def finetune_decoders(adapter: ModelAdapter, config: TrainConfig, prior=None) ->
         loss_per_step.append(step_losses)
 
         if step % config.log_every == 0:
-            _log_step(step, config.max_steps, step_losses)
+            _log_step(step, config.max_steps, step_losses, time.time() - t_step)
         if (step + 1) % config.save_every == 0:
             _save(out_dir, decoders, loss_per_step)
 
