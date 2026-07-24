@@ -6,6 +6,7 @@
 > **论文**:Balef et al. *Is One Layer Enough?* (ICML 2026)。
 > **参考(旧)代码库**:`/Users/hanxiao/docs/ml-reading/code/is_one_layer_enough/`(能复现但不友好的研究代码,作为参考实现)。
 > **论文材料(随库附带,新会话先读)**:`docs/paper/balef2026onelayer.md`(论文主页,含全部实验图 `docs/paper/assets/`)、`docs/paper/experiments.md`(六个实验的详细笔记)、`docs/paper/concepts/`(tabular-logit-lens / self-repair / layer-ablation / looped-transformer 四个机制概念页)。
+> **⭐ 已验证参考流程**:`docs/reference-pipeline.md` —— 旧代码在 LimiX-2M 上端到端跑通过一次(训 decoder → 推理 → self-repair 图),这份文档把每段的**输入输出契约、参数、踩过的坑**固化下来,是重写时要复刻的**行为契约**。重写 `training/`+`experiments/`+`plotting/` 前必读。
 > **相关文档**:`docs/old-code-exp4-walkthrough.md`(旧代码 Exp4 走读,随库附带);`/Users/hanxiao/docs/ml-reading/notes/exp4-exp6-repro-plan.md`(复现总计划与运维,留在 ml-reading)。
 
 ---
