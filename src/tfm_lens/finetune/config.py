@@ -57,11 +57,8 @@ class TrainConfig(BaseModel):
     wandb: bool = False
 
     device: str = Field(default_factory=default_device)
-    # Where the frozen backbone's captured residuals are held between the
-    # collect and train phases. "cpu" (default) offloads the whole macro-batch
-    # so GPU peak scales only with micro/training batches — safe on small cards.
-    # Set to the compute device (e.g. "cuda") to keep them resident and skip the
-    # GPU<->CPU round-trip when VRAM is ample (faster, but uses more of it).
+    # Where captured residuals sit between collect and train. "cpu" caps GPU peak
+    # (portable); set to the compute device to skip the round-trip when VRAM allows.
     readout_device: str = "cpu"
 
     @classmethod
