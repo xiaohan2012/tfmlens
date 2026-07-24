@@ -16,6 +16,9 @@ dependencies = [
     "xgboost",
     "joblib",
     "tqdm",
+    # finetune config
+    "pydantic>=2",
+    "pyyaml",
 ]
 
 [build-system]
