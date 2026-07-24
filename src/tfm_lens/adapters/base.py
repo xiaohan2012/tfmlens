@@ -33,6 +33,10 @@ class ModelAdapter(ABC):
     def decoder_template(self) -> nn.Module:
         """The backbone's decoder head, deepcopied into per-layer decoders."""
 
+    @abstractmethod
+    def to(self, device: str) -> "ModelAdapter":
+        """Move the underlying backbone to ``device``; return self (chainable)."""
+
     # ---- decode-path hooks (overridable; defaults suit 3D models) ----
     def select_label_token(self, emb):
         """Reduce a raw layer residual to [batch, seq, hidden].

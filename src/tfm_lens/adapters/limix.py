@@ -19,8 +19,12 @@ class LimixAdapter(ModelAdapter):
         self.model = model
 
     @classmethod
-    def from_checkpoint(cls, path):
-        return cls(load_model(path))
+    def from_checkpoint(cls, path, device: str = "cpu"):
+        return cls(load_model(path)).to(device)  # load_model lands on CPU
+
+    def to(self, device: str) -> "LimixAdapter":
+        self.model = self.model.to(device)
+        return self
 
     @property
     def layers(self):
