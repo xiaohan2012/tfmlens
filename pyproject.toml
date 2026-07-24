@@ -24,6 +24,7 @@ dev = [
     "pytest>=8",
     "pre-commit>=3.7",
     "ruff>=0.6",
+    "huggingface-hub",  # fetch the LimiX-2M ckpt for the integration test
 ]
 
 # Pull torch from the CPU-only wheel index so CI (and local) stays light and

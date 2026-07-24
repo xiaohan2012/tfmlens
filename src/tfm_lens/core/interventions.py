@@ -14,7 +14,7 @@ def skip_layer(adapter, idx):
     """Make layer ``idx`` the identity for the duration of the context."""
     layer = adapter.layers[idx]
     original = layer.forward
-    layer.forward = lambda x, *args, **kwargs: x
+    layer.forward = lambda x, *args, **kwargs: adapter.identity_forward(x)
     try:
         yield
     finally:

@@ -23,6 +23,12 @@ class TestSkipLayer:
         # output of layer 1 (depth 2) equals its input (depth 1).
         torch.testing.assert_close(cache[2], cache[1])
 
+    def test_skipped_layer_is_identity_4d(self, toy_adapter_4d, toy_input_4d):
+        # 4D layers return a 3-tuple; identity_forward must match that shape.
+        with skip_layer(toy_adapter_4d, 1):
+            cache = self._capture(toy_adapter_4d, toy_input_4d)
+        torch.testing.assert_close(cache[2], cache[1])
+
     def test_restores_forward_on_exit(self, toy_adapter, toy_input):
         baseline = self._capture(toy_adapter, toy_input)
         with skip_layer(toy_adapter, 1):
