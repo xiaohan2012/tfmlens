@@ -1,0 +1,25 @@
+Vendored TabICL prior
+=====================
+
+The files in this directory are vendored (copied) from the TabICL project:
+
+  Repository: https://github.com/soda-inria/tabicl
+  Version:    0.1.3 (tag v0.1.3, commit 0db954f), the release used by the
+              reference experiment
+  License:    BSD 3-Clause (see LICENSE)
+
+Vendored files (upstream src/tabicl/prior/ -> here):
+  prior_config.py, utils.py, hp_sampling.py, activations.py,
+  mlp_scm.py, tree_scm.py, reg2cls.py, dataset.py, genload.py
+
+Only change from upstream: two internal absolute imports in genload.py
+(`from tabicl.prior.dataset` / `from tabicl.prior.prior_config`) were rewritten
+to relative imports (`from .dataset` / `from .prior_config`) so the code lives
+under `tfm_lens.vendor.tabicl_prior` without polluting the top-level namespace.
+The file contents are otherwise unmodified, pinned to 0.1.3 for reproducibility.
+
+Why vendored (rather than `pip install tabicl`): TabICL *is* pip-installable,
+but we pin the exact prior source that produced the reference results to
+minimize variance while reproducing the paper. Switching to a pinned pip
+dependency is tracked as a follow-up (see the repo issue "Replace vendored
+TabICL prior with a pinned pip dependency").
