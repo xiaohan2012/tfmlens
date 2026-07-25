@@ -57,6 +57,40 @@ class ToyAdapter3D(ModelAdapter):
         return self
 
 
+class ToyKwargBlock(nn.Module):
+    """A Linear block that takes its input by name (``q``), so a backbone can drive
+    it with a keyword call ``blk(q=x)`` — exactly how TabICL's ICL Encoder calls its
+    blocks. Used to exercise the core's keyword-argument handling in capture / skip."""
+
+    def __init__(self, hidden: int):
+        super().__init__()
+        self.lin = nn.Linear(hidden, hidden)
+
+    def forward(self, q):
+        return self.lin(q)
+
+
+class ToyBackbone3DKwargs(nn.Module):
+    """Like ToyBackbone3D but drives each block by keyword (``blk(q=x)``)."""
+
+    def __init__(self, n_layers: int = 3, hidden: int = 8):
+        super().__init__()
+        self.blocks = nn.ModuleList(ToyKwargBlock(hidden) for _ in range(n_layers))
+
+    def forward(self, x):  # x: (batch, seq, hidden)
+        for blk in self.blocks:
+            x = blk(q=x)  # keyword call, like TabICL's Encoder
+        return x
+
+
+class ToyAdapter3DKwargs(ToyAdapter3D):
+    """3D adapter whose backbone calls blocks by keyword (``blk(q=x)``) — the TabICL
+    convention. Everything else (layers / forward_frozen / decoder / to) is inherited."""
+
+    def __init__(self):
+        self.backbone = ToyBackbone3DKwargs(n_layers=self.N_LAYERS, hidden=self.HIDDEN)
+
+
 class ToyBlock4D(nn.Module):
     """A 4D layer: operates on [batch, seq, tokens, hidden] and returns a 3-tuple,
     mimicking LimiX layers (residual, feature_attn, sample_attn)."""

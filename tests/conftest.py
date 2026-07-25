@@ -10,7 +10,7 @@ from copy import deepcopy
 import pytest
 import torch
 
-from toys import ToyAdapter3D, ToyAdapter4D
+from toys import ToyAdapter3D, ToyAdapter3DKwargs, ToyAdapter4D
 
 
 @pytest.fixture(scope="session")
@@ -39,6 +39,11 @@ def limix_model(limix_ckpt: str):
 @pytest.fixture
 def toy_adapter() -> ToyAdapter3D:
     return ToyAdapter3D()
+
+
+@pytest.fixture
+def toy_adapter_kwargs() -> ToyAdapter3DKwargs:
+    return ToyAdapter3DKwargs()
 
 
 @pytest.fixture

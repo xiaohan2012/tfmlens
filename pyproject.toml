@@ -48,6 +48,9 @@ eval = [
 # Plotting the reproduced figures (scripts/plot_*.py). Separate from eval so the
 # core / CI install stays free of a heavy matplotlib dependency.
 viz = ["matplotlib"]
+# TabICLv2 backbone (adapters/tabicl.py) — the raw model + its checkpoint loader.
+# Kept out of core so a LimiX-only install stays light.
+tabicl = ["tabicl>=2.1"]
 
 # Pull torch from the CPU-only wheel index so CI (and local) stays light and
 # cross-platform. `explicit = true` means only packages routed here via

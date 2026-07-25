@@ -22,13 +22,16 @@ def capture_layers(adapter):
     cache: list[torch.Tensor] = []
     handles = []
 
-    def input_hook(module, args):
-        cache.append(args[0].detach())  # depth 0: what enters the first layer
+    def input_hook(module, args, kwargs):
+        # residual is the layer's first input — positional (LimiX) or, when the
+        # layer is called by keyword (TabICL: block(q=x, ...)), the first kwarg.
+        x = args[0] if args else next(iter(kwargs.values()))
+        cache.append(x.detach())  # depth 0: what enters the first layer
 
     def output_hook(module, inputs, output):
         cache.append(_pick(output).detach())
 
-    handles.append(adapter.layers[0].register_forward_pre_hook(input_hook))
+    handles.append(adapter.layers[0].register_forward_pre_hook(input_hook, with_kwargs=True))
     for layer in adapter.layers:
         handles.append(layer.register_forward_hook(output_hook))
     try:
