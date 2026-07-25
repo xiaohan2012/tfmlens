@@ -13,6 +13,7 @@ import torch
 
 from tfm_lens.core.capture import capture_layers
 from tfm_lens.core.interventions import skip_layer
+from tfm_lens.core.logit_lens import logit_lens
 from tfm_lens.evaluation.layerwise import layerwise_auc, predict_layers
 
 BATCH = 4
@@ -53,6 +54,16 @@ class TestTabICLAdapterIntegration:
             tabicl_adapter.forward_frozen(X, y, eval_pos)
         assert len(cache) == 13  # input embedding + 12 layer outputs
         assert cache[0].dim() == 3  # [batch, rows, hidden] — 3D residual
+
+    def test_logit_lens_end_to_end(self, tabicl_adapter, table):
+        X, y, eval_pos = table
+        decoders = [tabicl_adapter.decoder_template() for _ in range(tabicl_adapter.n_layers + 1)]
+        with capture_layers(tabicl_adapter) as cache:
+            tabicl_adapter.forward_frozen(X, y, eval_pos)
+        preds = logit_lens(cache, decoders, tabicl_adapter, eval_pos)
+        assert len(preds) == 13
+        n_test = X.shape[1] - eval_pos
+        assert all(p.shape[0] == BATCH and p.shape[1] == n_test for p in preds)
 
     def test_skip_layer_is_identity(self, tabicl_adapter, table):
         # exercises the kwarg path on the real ICL Encoder (block(q=x, ...)).

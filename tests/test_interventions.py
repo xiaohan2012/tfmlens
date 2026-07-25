@@ -29,10 +29,10 @@ class TestSkipLayer:
             cache = self._capture(toy_adapter_4d, toy_input_4d)
         torch.testing.assert_close(cache[2], cache[1])
 
-    def test_skipped_layer_is_identity_kwargs(self, toy_adapter_kwargs, toy_input):
+    def test_skipped_layer_is_identity_keyword_call(self, toy_adapter_keyword_call, toy_input):
         # keyword-called layers (TabICL: blk(q=x)): skip must still neutralize the layer.
-        with skip_layer(toy_adapter_kwargs, 1):
-            cache = self._capture(toy_adapter_kwargs, toy_input)
+        with skip_layer(toy_adapter_keyword_call, 1):
+            cache = self._capture(toy_adapter_keyword_call, toy_input)
         # output of layer 1 (depth 2) equals its input (depth 1).
         torch.testing.assert_close(cache[2], cache[1])
 

@@ -9,8 +9,41 @@ from copy import deepcopy
 
 import pytest
 import torch
+import torch.nn as nn
 
-from toys import ToyAdapter3D, ToyAdapter3DKwargs, ToyAdapter4D
+from toys import ToyAdapter3D, ToyAdapter4D
+
+
+class _KeywordCallBlock(nn.Module):
+    """A Linear block that takes its input by name (``q``) so a backbone can call it
+    as ``blk(q=x)``."""
+
+    def __init__(self, hidden: int):
+        super().__init__()
+        self.lin = nn.Linear(hidden, hidden)
+
+    def forward(self, q):
+        return self.lin(q)
+
+
+class _KeywordCallBackbone(nn.Module):
+    def __init__(self, n_layers: int, hidden: int):
+        super().__init__()
+        self.blocks = nn.ModuleList(_KeywordCallBlock(hidden) for _ in range(n_layers))
+
+    def forward(self, x):
+        for blk in self.blocks:
+            x = blk(q=x)  # keyword call, like TabICL's ICL Encoder
+        return x
+
+
+class ToyAdapter3DKeywordCall(ToyAdapter3D):
+    """ToyAdapter3D whose backbone drives blocks by keyword (``blk(q=x)``) — TabICL's
+    ICL Encoder convention, to exercise the core's kwarg handling. Only the fixture
+    below uses it, so it lives here rather than in the shared toys.py."""
+
+    def __init__(self):
+        self.backbone = _KeywordCallBackbone(self.N_LAYERS, self.HIDDEN)
 
 
 @pytest.fixture(scope="session")
@@ -42,8 +75,8 @@ def toy_adapter() -> ToyAdapter3D:
 
 
 @pytest.fixture
-def toy_adapter_kwargs() -> ToyAdapter3DKwargs:
-    return ToyAdapter3DKwargs()
+def toy_adapter_keyword_call() -> ToyAdapter3DKeywordCall:
+    return ToyAdapter3DKeywordCall()
 
 
 @pytest.fixture
