@@ -31,6 +31,17 @@ class TestCaptureLayers:
         torch.testing.assert_close(cache[0], toy_input)
         torch.testing.assert_close(cache[1], blocks[0](toy_input))
 
+    def test_captures_keyword_called_layers(self, toy_adapter_keyword_call, toy_input):
+        # TabICL drives blocks by keyword (blk(q=x)); the input pre-hook must still
+        # grab depth 0 (the first layer's input) with no positional args present.
+        adapter = toy_adapter_keyword_call
+        blocks = adapter.layers
+        with capture_layers(adapter) as cache:
+            adapter.forward_frozen(toy_input, None, 5)
+        assert len(cache) == adapter.n_layers + 1 == 4
+        torch.testing.assert_close(cache[0], toy_input)  # depth 0 = raw input
+        torch.testing.assert_close(cache[1], blocks[0](q=toy_input))  # depth 1 = layer 0 output
+
     def test_hooks_removed_on_exit(self, toy_adapter, toy_input):
         with capture_layers(toy_adapter) as first:
             toy_adapter.forward_frozen(toy_input, None, 5)
