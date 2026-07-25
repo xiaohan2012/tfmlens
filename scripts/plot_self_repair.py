@@ -1,6 +1,6 @@
 """Plot the exp6 self-repair trajectories (paper Figure 8) from the sweep JSON.
 
-Reads ``out/self_repair.json`` (written by run_self_repair.py). Per dataset every
+Reads ``out/self_repair.json`` (written by run_self_repair_sweep.py). Per dataset every
 trajectory is normalized by that dataset's native final-layer AUC (floored 0.5),
 then averaged across datasets. Draws:
 

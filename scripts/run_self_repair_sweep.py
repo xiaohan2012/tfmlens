@@ -10,9 +10,9 @@ subsample flags; --skip-diffs drops the (expensive) scatter data so a full pass
 only pays for the Figure-8 trajectories.
 
     # fast subsample (default)
-    uv run --group eval python scripts/run_self_repair.py
+    uv run --group eval python scripts/run_self_repair_sweep.py
     # full run, Figure-8 data only
-    uv run --group eval python scripts/run_self_repair.py \
+    uv run --group eval python scripts/run_self_repair_sweep.py \
         --subsample-train 0 --subsample-test 0 --skip-diffs \
         --out out/self_repair_full.json
 """

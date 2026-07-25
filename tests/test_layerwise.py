@@ -34,11 +34,14 @@ def test_layerwise_auc_scores_each_depth():
     assert 0.0 <= aucs[1] <= 1.0
 
 
-@pytest.mark.skipif(not TRAINED_DECODERS.exists(), reason="no trained decoders at weights/limix_2m")
-def test_load_decoders_returns_one_per_depth(limix_model):
-    adapter = LimixAdapter(limix_model)
-    decoders = load_decoders(TRAINED_DECODERS, adapter)
-    assert len(decoders) == adapter.n_layers + 1  # one decoder per capture depth
+def test_load_decoders_returns_one_per_depth(toy_adapter, tmp_path):
+    # load_decoders is pure plumbing (read N state dicts -> N decoders), so a toy
+    # template round-tripped through disk exercises it — no trained weights needed.
+    n = toy_adapter.n_layers + 1
+    for i in range(n):
+        torch.save(toy_adapter.decoder_template().state_dict(), tmp_path / f"decoder_layer_{i}.pth")
+    decoders = load_decoders(tmp_path, toy_adapter)
+    assert len(decoders) == n  # one decoder per capture depth
 
 
 @pytest.mark.skipif(not TRAINED_DECODERS.exists(), reason="no trained decoders at weights/limix_2m")
