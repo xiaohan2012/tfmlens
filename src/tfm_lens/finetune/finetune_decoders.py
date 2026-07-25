@@ -78,13 +78,17 @@ def finetune_decoders(adapter: ModelAdapter, config: TrainConfig, prior=None) ->
             torch.split(y, config.micro_batch_size),
             strict=True,
         ):
+            # Readout stays inside no_grad: the backbone is frozen, so the per-layer
+            # readout (post_norm has trainable params) must not build an autograd
+            # graph — otherwise decoders sharing this batch would each backward
+            # through it and hit "backward through a freed graph". Only decoders train.
             with torch.no_grad(), capture_layers(adapter) as cache:
                 adapter.forward_frozen(xb.to(device), yb[:, :eval_pos].to(device), eval_pos)
-            for i, emb in enumerate(cache):
-                # Park the readout on readout_device: "cpu" offloads to keep GPU
-                # peak low (portable), or the compute device to stay resident and
-                # skip the round-trip when VRAM is ample (faster).
-                layer_embs[i].append(_readout(adapter, emb, eval_pos).to(config.readout_device))
+                for i, emb in enumerate(cache):
+                    # Park the readout on readout_device: "cpu" offloads to keep GPU
+                    # peak low (portable), or the compute device to stay resident and
+                    # skip the round-trip when VRAM is ample (faster).
+                    layer_embs[i].append(_readout(adapter, emb, eval_pos).to(config.readout_device))
         embeddings = [torch.cat(chunks, dim=0) for chunks in layer_embs]
         targets = y[:, eval_pos:].long()
 
