@@ -19,7 +19,13 @@ class LimixAdapter(ModelAdapter):
         self.model = model
 
     @classmethod
-    def from_checkpoint(cls, path, device: str = "cpu"):
+    def from_checkpoint(cls, path: str | None = None, device: str = "cpu") -> "LimixAdapter":
+        """Load LimiX from a checkpoint; ``path=None`` downloads LimiX-2M from HF
+        (mirrors TabICLAdapter.from_checkpoint so the finetune factory is symmetric)."""
+        if path is None:
+            from huggingface_hub import hf_hub_download
+
+            path = hf_hub_download(repo_id="stableai-org/LimiX-2M", filename="LimiX-2M.ckpt")
         return cls(load_model(path)).to(device)  # load_model lands on CPU
 
     def to(self, device: str) -> "LimixAdapter":

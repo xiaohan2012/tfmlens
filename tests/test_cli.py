@@ -14,51 +14,52 @@ from tfm_lens.finetune import __main__ as cli
 from tfm_lens.finetune.__main__ import build_adapter
 
 
-def test_cli_wires_config_model_ckpt_and_device(monkeypatch, tmp_path):
-    (tmp_path / "c.yaml").write_text("out_dir: out\ndevice: cpu\n")
-    seen: dict = {}
+class TestFinetuneCli:
+    def test_main_wires_config_model_ckpt_and_device(self, monkeypatch, tmp_path):
+        (tmp_path / "c.yaml").write_text("out_dir: out\ndevice: cpu\n")
+        seen: dict = {}
 
-    def fake_from_checkpoint(path, device):
-        seen["ckpt"], seen["device"] = path, device
-        return "ADAPTER"
+        def fake_from_checkpoint(path, device):
+            seen["ckpt"], seen["device"] = path, device
+            return "ADAPTER"
 
-    def fake_finetune(adapter, config):
-        seen["adapter"], seen["out_dir"] = adapter, str(config.out_dir)
+        def fake_finetune(adapter, config):
+            seen["adapter"], seen["out_dir"] = adapter, str(config.out_dir)
 
-    monkeypatch.setattr(
-        "tfm_lens.adapters.limix.LimixAdapter.from_checkpoint", fake_from_checkpoint
-    )
-    monkeypatch.setattr(cli, "finetune_decoders", fake_finetune)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["prog", "--config", str(tmp_path / "c.yaml"), "--model", "limix_2m", "--ckpt", "ck.pth"],
-    )
+        monkeypatch.setattr(
+            "tfm_lens.adapters.limix.LimixAdapter.from_checkpoint", fake_from_checkpoint
+        )
+        monkeypatch.setattr(cli, "finetune_decoders", fake_finetune)
+        argv = [
+            "prog",
+            "--config",
+            str(tmp_path / "c.yaml"),
+            "--model",
+            "limix_2m",
+            "--ckpt",
+            "ck.pth",
+        ]
+        monkeypatch.setattr(sys, "argv", argv)
 
-    cli.main()
+        cli.main()
 
-    assert seen["ckpt"] == "ck.pth"
-    assert seen["device"] == "cpu"  # from the yaml, threaded into from_checkpoint
-    assert seen["adapter"] == "ADAPTER"
-    assert seen["out_dir"] == "out"
+        assert seen["ckpt"] == "ck.pth"
+        assert seen["device"] == "cpu"  # from the yaml, threaded into from_checkpoint
+        assert seen["adapter"] == "ADAPTER"
+        assert seen["out_dir"] == "out"
 
+    def test_build_adapter_routes_to_tabicl_passing_none_ckpt(self, monkeypatch):
+        pytest.importorskip("tabicl")
+        import tfm_lens.adapters.tabicl as tabicl_mod
 
-def test_build_adapter_routes_to_tabicl(monkeypatch):
-    pytest.importorskip("tabicl")
-    import tfm_lens.adapters.tabicl as tabicl_mod
+        monkeypatch.setattr(
+            tabicl_mod.TabICLAdapter,
+            "from_checkpoint",
+            lambda path, device: ("TABICL", path, device),
+        )
+        # ckpt omitted -> None flows through so the adapter downloads from HF.
+        assert build_adapter("tabicl_v2", None, "cpu") == ("TABICL", None, "cpu")
 
-    monkeypatch.setattr(
-        tabicl_mod.TabICLAdapter, "from_checkpoint", lambda path, device: ("TABICL", path, device)
-    )
-    # ckpt omitted -> None flows through so the adapter downloads the HF checkpoint.
-    assert build_adapter("tabicl_v2", None, "cpu") == ("TABICL", None, "cpu")
-
-
-def test_build_adapter_requires_ckpt_for_limix():
-    with pytest.raises(SystemExit):
-        build_adapter("limix_2m", None, "cpu")
-
-
-def test_build_adapter_rejects_unknown_model():
-    with pytest.raises(SystemExit):
-        build_adapter("bogus", None, "cpu")
+    def test_build_adapter_rejects_unknown_model(self):
+        with pytest.raises(SystemExit):
+            build_adapter("bogus", None, "cpu")

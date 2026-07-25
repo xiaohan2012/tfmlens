@@ -18,17 +18,20 @@ from tfm_lens.finetune.finetune_decoders import finetune_decoders
 
 
 def build_adapter(model: str, ckpt: str | None, device: str):
-    """Load the requested backbone as a ModelAdapter on ``device``."""
+    """Load the requested backbone as a ModelAdapter on ``device``.
+
+    Both adapters' from_checkpoint take ``ckpt=None`` to download their default
+    checkpoint from HF, so the two branches are symmetric — no per-model special
+    casing.
+    """
     if model == "limix_2m":
         from tfm_lens.adapters.limix import LimixAdapter
 
-        if ckpt is None:
-            raise SystemExit("--ckpt is required for --model limix_2m")
         return LimixAdapter.from_checkpoint(ckpt, device=device)
     if model == "tabicl_v2":
         from tfm_lens.adapters.tabicl import TabICLAdapter
 
-        return TabICLAdapter.from_checkpoint(ckpt, device=device)  # ckpt=None -> HF download
+        return TabICLAdapter.from_checkpoint(ckpt, device=device)
     raise SystemExit(f"unknown --model: {model}")
 
 
@@ -39,8 +42,7 @@ def main() -> None:
     parser.add_argument(
         "--ckpt",
         default=None,
-        help="checkpoint path; required for limix_2m, optional for tabicl_v2 "
-        "(downloads the v2 checkpoint from HF if omitted)",
+        help="checkpoint path; omit to download the model's default checkpoint from HF",
     )
     args = parser.parse_args()
 
