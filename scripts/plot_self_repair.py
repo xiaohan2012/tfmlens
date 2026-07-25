@@ -21,11 +21,14 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+_MODEL_LABELS = {"limix_2m": "LimiX-2M", "tabicl_v2": "TabICLv2"}
+
 
 def _parse_args():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--in", dest="inp", type=Path, default=Path("out/self_repair.json"))
     p.add_argument("--out", type=Path, default=Path("out/self_repair_fig8.png"))
+    p.add_argument("--model", choices=list(_MODEL_LABELS), default="limix_2m", help="title label")
     return p.parse_args()
 
 
@@ -84,7 +87,7 @@ def main():
 
     ax.set_xlabel("Layer (forward-pass order)")
     ax.set_ylabel("Normalized performance (ROC-AUC)")
-    ax.set_title(f"LimiX-2M self-repair ({len(results)} TabArena binary tasks)")
+    ax.set_title(f"{_MODEL_LABELS[args.model]} self-repair ({len(results)} TabArena binary tasks)")
     ax.legend(loc="lower right")
 
     sm = plt.cm.ScalarMappable(cmap="viridis", norm=plt.Normalize(0, n_layers - 1))
