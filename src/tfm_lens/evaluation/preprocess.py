@@ -51,3 +51,32 @@ def limix_preprocess(X_train, y_train, X_test, categorical_idx, seed=0):
 
     eval_pos = len(y_train)
     return x[:eval_pos], x[eval_pos:]
+
+
+def tabicl_preprocess(X_train, y_train, X_test, categorical_idx, seed=0):
+    """Preprocess a (train, test) table for the frozen TabICL forward.
+
+    Reproduces one clean (no-ensemble) member of TabICL's pipeline:
+    ``TransformToNumerical`` (ordinal-encodes categorical columns — detected by
+    ``category`` dtype) then ``PreprocessingPipeline`` with the code-default
+    ``power`` normalization (standard-scale -> yeo-johnson -> outlier-clip). Fits
+    on the train (support) rows, transforms both. Returns ``(X_train_p, X_test_p)``
+    float32 arrays ready for ``predict_layers``. The 8-way ensemble (none/power x
+    feature shuffles) is deferred — self-repair needs a single clean forward.
+    """
+    import pandas as pd
+    from tabicl._sklearn.preprocessing import PreprocessingPipeline, TransformToNumerical
+
+    x = np.concatenate([np.asarray(X_train), np.asarray(X_test)], axis=0)
+    df = pd.DataFrame(x)
+    for c in categorical_idx:
+        df[c] = df[c].astype("category")  # so TransformToNumerical treats it as categorical
+    eval_pos = len(y_train)
+
+    encoder = TransformToNumerical().fit(df.iloc[:eval_pos])
+    x_num = np.asarray(encoder.transform(df), dtype=np.float32)
+
+    pipe = PreprocessingPipeline(normalization_method="power", random_state=seed)
+    pipe.fit(x_num[:eval_pos])
+    x_out = np.asarray(pipe.transform(x_num), dtype=np.float32)
+    return x_out[:eval_pos], x_out[eval_pos:]
