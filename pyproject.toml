@@ -45,6 +45,9 @@ eval = [
     "pandas",  # vendored data_utils / OpenML tables
     "openml",  # TabArena task loading
 ]
+# Plotting the reproduced figures (scripts/plot_*.py). Separate from eval so the
+# core / CI install stays free of a heavy matplotlib dependency.
+viz = ["matplotlib"]
 
 # Pull torch from the CPU-only wheel index so CI (and local) stays light and
 # cross-platform. `explicit = true` means only packages routed here via
