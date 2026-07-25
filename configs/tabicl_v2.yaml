@@ -1,0 +1,9 @@
+# TabICLv2 finetune config — only the differences from the config.py defaults
+# (mix_scm prior, 200 steps, AdamW(3e-5, 1e-4), etc.). device auto-detects.
+# Trains one decoder per capture depth for the TabICL ICL stage; --model tabicl_v2
+# downloads the v2 checkpoint from HF when --ckpt is omitted.
+out_dir: weights/tabicl_v2
+prior:
+  # Keep this a positive int: the vendored prior gates parallel table generation
+  # on `n_jobs > 1`, so joblib's "-1 = all cores" silently falls back to serial.
+  n_jobs: 16

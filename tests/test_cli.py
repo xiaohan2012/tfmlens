@@ -1,15 +1,20 @@
 """The `python -m tfm_lens.finetune` entrypoint — wiring only.
 
 Patches out the heavy pieces (checkpoint load, training loop) and asserts main()
-routes --config / --ckpt / device into from_checkpoint and finetune_decoders.
+routes --config / --model / --ckpt / device into the adapter factory and
+finetune_decoders. The factory imports adapters lazily from their real modules,
+so the patches target those module paths.
 """
 
 import sys
 
+import pytest
+
 from tfm_lens.finetune import __main__ as cli
+from tfm_lens.finetune.__main__ import build_adapter
 
 
-def test_cli_wires_config_ckpt_and_device(monkeypatch, tmp_path):
+def test_cli_wires_config_model_ckpt_and_device(monkeypatch, tmp_path):
     (tmp_path / "c.yaml").write_text("out_dir: out\ndevice: cpu\n")
     seen: dict = {}
 
@@ -20,10 +25,14 @@ def test_cli_wires_config_ckpt_and_device(monkeypatch, tmp_path):
     def fake_finetune(adapter, config):
         seen["adapter"], seen["out_dir"] = adapter, str(config.out_dir)
 
-    monkeypatch.setattr(cli.LimixAdapter, "from_checkpoint", fake_from_checkpoint)
+    monkeypatch.setattr(
+        "tfm_lens.adapters.limix.LimixAdapter.from_checkpoint", fake_from_checkpoint
+    )
     monkeypatch.setattr(cli, "finetune_decoders", fake_finetune)
     monkeypatch.setattr(
-        sys, "argv", ["prog", "--config", str(tmp_path / "c.yaml"), "--ckpt", "ck.pth"]
+        sys,
+        "argv",
+        ["prog", "--config", str(tmp_path / "c.yaml"), "--model", "limix_2m", "--ckpt", "ck.pth"],
     )
 
     cli.main()
@@ -32,3 +41,24 @@ def test_cli_wires_config_ckpt_and_device(monkeypatch, tmp_path):
     assert seen["device"] == "cpu"  # from the yaml, threaded into from_checkpoint
     assert seen["adapter"] == "ADAPTER"
     assert seen["out_dir"] == "out"
+
+
+def test_build_adapter_routes_to_tabicl(monkeypatch):
+    pytest.importorskip("tabicl")
+    import tfm_lens.adapters.tabicl as tabicl_mod
+
+    monkeypatch.setattr(
+        tabicl_mod.TabICLAdapter, "from_checkpoint", lambda path, device: ("TABICL", path, device)
+    )
+    # ckpt omitted -> None flows through so the adapter downloads the HF checkpoint.
+    assert build_adapter("tabicl_v2", None, "cpu") == ("TABICL", None, "cpu")
+
+
+def test_build_adapter_requires_ckpt_for_limix():
+    with pytest.raises(SystemExit):
+        build_adapter("limix_2m", None, "cpu")
+
+
+def test_build_adapter_rejects_unknown_model():
+    with pytest.raises(SystemExit):
+        build_adapter("bogus", None, "cpu")
