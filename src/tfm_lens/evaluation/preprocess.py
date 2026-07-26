@@ -9,13 +9,6 @@ ensemble is deferred.
 
 import numpy as np
 
-from tfm_lens.vendor.limix.preprocess import (
-    CategoricalFeatureEncoder,
-    FeatureShuffler,
-    FilterValidFeatures,
-    RebalanceFeatureDistribution,
-)
-
 # worker ① of LimiX's cls_default_noretrieval.json
 _WORKER_CONFIG = {
     "RebalanceFeatureDistribution": {
@@ -36,6 +29,13 @@ def limix_preprocess(X_train, y_train, X_test, categorical_idx, seed=0):
     — and transforms both. Returns ``(X_train_p, X_test_p)`` float32 arrays ready
     for ``predict_layers``.
     """
+    from tfm_lens.vendor.limix.preprocess import (
+        CategoricalFeatureEncoder,
+        FeatureShuffler,
+        FilterValidFeatures,
+        RebalanceFeatureDistribution,
+    )
+
     x = np.concatenate([np.asarray(X_train), np.asarray(X_test)], axis=0).astype(np.float32)
     cat = list(categorical_idx)
     y = np.asarray(y_train)
