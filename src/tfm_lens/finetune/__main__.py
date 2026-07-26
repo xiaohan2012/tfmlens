@@ -20,9 +20,8 @@ from tfm_lens.finetune.finetune_decoders import finetune_decoders
 def build_adapter(model: str, ckpt: str | None, device: str):
     """Load the requested backbone as a ModelAdapter on ``device``.
 
-    Both adapters' from_checkpoint take ``ckpt=None`` to download their default
-    checkpoint from HF, so the two branches are symmetric — no per-model special
-    casing.
+    Every adapter's from_checkpoint takes ``ckpt=None`` to download its default
+    checkpoint from HF, so the branches are symmetric — no per-model special casing.
     """
     if model == "limix_2m":
         from tfm_lens.adapters.limix import LimixAdapter
@@ -32,13 +31,17 @@ def build_adapter(model: str, ckpt: str | None, device: str):
         from tfm_lens.adapters.tabicl import TabICLAdapter
 
         return TabICLAdapter.from_checkpoint(ckpt, device=device)
+    if model == "mitra":
+        from tfm_lens.adapters.mitra import MitraAdapter
+
+        return MitraAdapter.from_checkpoint(ckpt, device=device)
     raise SystemExit(f"unknown --model: {model}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m tfm_lens.finetune")
     parser.add_argument("--config", required=True, help="path to a TrainConfig YAML")
-    parser.add_argument("--model", choices=["limix_2m", "tabicl_v2"], default="limix_2m")
+    parser.add_argument("--model", choices=["limix_2m", "tabicl_v2", "mitra"], default="limix_2m")
     parser.add_argument(
         "--ckpt",
         default=None,
