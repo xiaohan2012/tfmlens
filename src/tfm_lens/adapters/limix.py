@@ -51,5 +51,5 @@ class LimixAdapter(ModelAdapter):
         h = self.model.encoder_out_norm(h)
         return h[:, eval_pos:]  # keep only the test rows
 
-    def identity_forward(self, x):
-        return x, None, None  # LimiX layers return (residual, feat_attn, sample_attn)
+    def identity_forward(self, *args, **kwargs):
+        return args[0], None, None  # LimiX layers return (residual, feat_attn, sample_attn)

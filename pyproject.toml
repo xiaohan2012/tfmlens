@@ -51,6 +51,9 @@ viz = ["matplotlib"]
 # TabICLv2 backbone (adapters/tabicl.py) — the raw model + its checkpoint loader.
 # Kept out of core so a LimiX-only install stays light.
 tabicl = ["tabicl>=2.1"]
+# Mitra backbone (adapters/mitra.py) — vendored Tab2D. No flash_attn: we force the
+# standard-attention path so the adapter maintains one forward layout.
+mitra = ["einx", "safetensors", "huggingface-hub"]
 
 # Pull torch from the CPU-only wheel index so CI (and local) stays light and
 # cross-platform. `explicit = true` means only packages routed here via

@@ -11,6 +11,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+from tfm_lens.adapters.base import ModelAdapter
 from toys import ToyAdapter3D, ToyAdapter4D
 
 
@@ -46,6 +47,61 @@ class ToyAdapter3DKeywordCall(ToyAdapter3D):
         self.backbone = _KeywordCallBackbone(self.N_LAYERS, self.HIDDEN)
 
 
+class _DoubleStreamBlock(nn.Module):
+    """A block that takes two streams (support, query) and returns both — the Mitra
+    convention, to exercise the core's double-stream skip."""
+
+    def __init__(self, hidden: int):
+        super().__init__()
+        self.lin = nn.Linear(hidden, hidden)
+
+    def forward(self, support, query):
+        return self.lin(support), self.lin(query)
+
+
+class _DoubleStreamBackbone(nn.Module):
+    def __init__(self, n_layers: int, hidden: int):
+        super().__init__()
+        self.blocks = nn.ModuleList(_DoubleStreamBlock(hidden) for _ in range(n_layers))
+
+    def forward(self, support, query):
+        for blk in self.blocks:
+            support, query = blk(support, query)
+        return query
+
+
+class ToyAdapterDoubleStream(ModelAdapter):
+    """3D double-stream adapter (Mitra family): layers take/return (support, query),
+    readout takes the query stream. Only the fixture below uses it."""
+
+    HIDDEN = ToyAdapter3D.HIDDEN
+    N_LAYERS = ToyAdapter3D.N_LAYERS
+
+    def __init__(self):
+        self.backbone = _DoubleStreamBackbone(self.N_LAYERS, self.HIDDEN)
+
+    @property
+    def layers(self):
+        return list(self.backbone.blocks)
+
+    def forward_frozen(self, X, y_train, eval_pos):
+        with torch.no_grad():
+            self.backbone(X[:, :eval_pos], X[:, eval_pos:])  # support, query
+
+    def decoder_template(self):
+        return nn.Linear(self.HIDDEN, ToyAdapter3D.N_CLASSES)
+
+    def to(self, device):
+        self.backbone = self.backbone.to(device)
+        return self
+
+    def readout(self, out, eval_pos):
+        return out[1]  # query stream (3D, already the test rows)
+
+    def identity_forward(self, *args, **kwargs):
+        return args[0], args[1]
+
+
 @pytest.fixture(scope="session")
 def limix_ckpt() -> str:
     """Path to LimiX-2M.ckpt: use $LIMIX_2M_CKPT if set, else fetch from HF."""
@@ -77,6 +133,11 @@ def toy_adapter() -> ToyAdapter3D:
 @pytest.fixture
 def toy_adapter_keyword_call() -> ToyAdapter3DKeywordCall:
     return ToyAdapter3DKeywordCall()
+
+
+@pytest.fixture
+def toy_adapter_double_stream() -> ToyAdapterDoubleStream:
+    return ToyAdapterDoubleStream()
 
 
 @pytest.fixture

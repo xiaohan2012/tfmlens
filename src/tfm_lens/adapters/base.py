@@ -54,11 +54,14 @@ class ModelAdapter(ABC):
         return h[:, eval_pos:]
 
     # ---- intervention hook (overridable; default suits single-output layers) ----
-    def identity_forward(self, x):
-        """What a skipped layer should return. Default passes ``x`` through; models
-        whose layers return a tuple override, e.g. ``return (x, None, None)``.
+    def identity_forward(self, *args, **kwargs):
+        """What a skipped layer returns, given the layer's inputs. Default: pass the
+        first input (the residual) through. Override for tuple-returning layers:
+
+        - LimiX: ``return args[0], None, None``
+        - Mitra: ``return args[0], args[1]`` (support, query)
         """
-        return x
+        return args[0] if args else next(iter(kwargs.values()))
 
     @property
     def n_layers(self) -> int:

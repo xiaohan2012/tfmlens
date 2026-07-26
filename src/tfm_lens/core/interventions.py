@@ -14,11 +14,10 @@ def skip_layer(adapter, idx):
     """Make layer ``idx`` the identity for the duration of the context."""
     layer = adapter.layers[idx]
     original = layer.forward
-    # residual is the layer's first input — positional (LimiX) or, when the layer
-    # is called by keyword (TabICL: layer(q=x, ...)), the first kwarg.
-    layer.forward = lambda *args, **kwargs: adapter.identity_forward(
-        args[0] if args else next(iter(kwargs.values()))
-    )
+    # Pass the layer's whole input to identity_forward; the adapter decides what a
+    # skipped layer returns (single residual, or both streams for a double-stream
+    # model like Mitra).
+    layer.forward = lambda *args, **kwargs: adapter.identity_forward(*args, **kwargs)
     try:
         yield
     finally:
