@@ -71,6 +71,17 @@ class TestFinetuneCli:
         )
         assert build_adapter("mitra", None, "cpu") == ("MITRA", None, "cpu")
 
+    def test_build_adapter_routes_to_tabfm_passing_none_ckpt(self, monkeypatch):
+        pytest.importorskip("safetensors")  # the tabfm group
+        import tfm_lens.adapters.tabfm as tabfm_mod
+
+        monkeypatch.setattr(
+            tabfm_mod.TabFMAdapter,
+            "from_checkpoint",
+            lambda path, device: ("TABFM", path, device),
+        )
+        assert build_adapter("tabfm", None, "cpu") == ("TABFM", None, "cpu")
+
     def test_build_adapter_rejects_unknown_model(self):
         with pytest.raises(SystemExit):
             build_adapter("bogus", None, "cpu")
