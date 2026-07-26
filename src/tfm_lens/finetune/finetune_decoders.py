@@ -24,13 +24,6 @@ from tfm_lens.finetune.config import TrainConfig
 from tfm_lens.utils import seed_everything
 
 
-def _readout(adapter: ModelAdapter, emb, eval_pos: int):
-    """Raw layer residual -> test-row, decoder-ready tensor (same as logit_lens)."""
-    h = adapter.select_label_token(emb)
-    h = adapter.post_norm(h)
-    return h[:, eval_pos:]
-
-
 def _log_step(step: int, total: int, layer_losses: list[float], dt: float) -> None:
     n = len(layer_losses)
     mid = n // 2
@@ -88,7 +81,7 @@ def finetune_decoders(adapter: ModelAdapter, config: TrainConfig, prior=None) ->
                     # Park the readout on readout_device: "cpu" offloads to keep GPU
                     # peak low (portable), or the compute device to stay resident and
                     # skip the round-trip when VRAM is ample (faster).
-                    layer_embs[i].append(_readout(adapter, emb, eval_pos).to(config.readout_device))
+                    layer_embs[i].append(adapter.readout(emb, eval_pos).to(config.readout_device))
         embeddings = [torch.cat(chunks, dim=0) for chunks in layer_embs]
         targets = y[:, eval_pos:].long()
 

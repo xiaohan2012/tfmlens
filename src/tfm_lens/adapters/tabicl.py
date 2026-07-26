@@ -75,8 +75,11 @@ class TabICLAdapter(ModelAdapter):
     def decoder_template(self):
         return self.model.icl_predictor.decoder
 
-    def post_norm(self, emb):
-        return self.model.icl_predictor.ln(emb)  # pre-norm arch: ln sits before the decoder
+    def readout(self, out, eval_pos: int):
+        """TabICL decode path (see ModelAdapter.readout): 3D residual -> final ICL
+        LayerNorm -> test rows (no token axis to select)."""
+        h = out[0] if isinstance(out, tuple) else out  # single tensor (3D residual)
+        h = self.model.icl_predictor.ln(h)  # pre-norm arch: ln sits before the decoder
+        return h[:, eval_pos:]  # keep only the test rows
 
-    # select_label_token: identity (3D residual) — base default
     # identity_forward: return x — base default (ICL blocks return a single Tensor)

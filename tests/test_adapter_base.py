@@ -36,10 +36,11 @@ class TestModelAdapter:
         out = decoder(torch.randn(2, ToyAdapter3D.HIDDEN))
         assert out.shape == (2, ToyAdapter3D.N_CLASSES)
 
-    def test_post_norm_defaults_to_identity(self, toy_adapter):
-        # logit_lens applies post_norm before decoding; the default must be a no-op.
-        x = torch.randn(2, ToyAdapter3D.HIDDEN)
-        torch.testing.assert_close(toy_adapter.post_norm(x), x)
+    def test_readout_defaults_to_stream_and_test_rows(self, toy_adapter):
+        # logit_lens calls readout to turn a raw layer output into decoder-ready
+        # test-row residuals; the 3D default picks the stream and keeps test rows.
+        emb = torch.randn(1, 5, ToyAdapter3D.HIDDEN)  # (batch, seq, hidden)
+        torch.testing.assert_close(toy_adapter.readout(emb, eval_pos=3), emb[:, 3:])
 
     def test_to_is_chainable_and_moves_the_backbone(self, toy_adapter):
         # finetune_decoders co-locates the frozen backbone with the decoders and

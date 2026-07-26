@@ -37,19 +37,21 @@ class ModelAdapter(ABC):
     def to(self, device: str) -> "ModelAdapter":
         """Move the underlying backbone to ``device``; return self (chainable)."""
 
-    # ---- decode-path hooks (overridable; defaults suit 3D models) ----
-    def select_label_token(self, emb):
-        """Reduce a raw layer residual to [batch, seq, hidden].
+    # ---- decode-path hook (overridable) ----
+    def readout(self, layer_output, eval_pos: int):
+        """A layer's raw output -> ``[batch, n_test, hidden]``, decoder-ready.
 
-        3D models (TabPFN v1 / TabICL / the toy) are already [batch, seq, hidden]
-        -> identity. 4D models (LimiX / TabPFN v2) hold the label token on the
-        token axis and override this, e.g. ``return emb[:, :, -1, :]``.
+        Steps a subclass may need to override:
+
+        - pick the residual stream (unwrap a tuple output; pick a 2nd stream)
+        - select the label-bearing token (4D models)
+        - apply a pre-decoder norm (LimiX / TabICL)
+        - keep only the test rows
+
+        Default: single 3D stream, no norm — take the residual, slice test rows.
         """
-        return emb
-
-    def post_norm(self, emb):
-        """Normalization applied before the decoder; identity by default."""
-        return emb
+        h = layer_output[0] if isinstance(layer_output, tuple) else layer_output
+        return h[:, eval_pos:]
 
     # ---- intervention hook (overridable; default suits single-output layers) ----
     def identity_forward(self, x):
