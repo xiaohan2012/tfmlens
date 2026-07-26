@@ -12,3 +12,6 @@ prior:
   # CUDA context crash the run; the forward is the bottleneck anyway, so serial
   # prior generation costs little.
   n_jobs: 1
+  # TabFM's row attention is O(seq^2); seq 512 keeps a step ~70s (~4h for 200)
+  # vs. minutes at 1024. Decoder decodability doesn't need the full 1024 context.
+  max_seq_len: 512
