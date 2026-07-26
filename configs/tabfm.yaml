@@ -1,7 +1,14 @@
 # TabFM finetune config — only the differences from the config.py defaults
 # (mix_scm prior, 200 steps, AdamW). device auto-detects. Trains one decoder per
-# capture depth for TabFM's ICL stage; --model tabfm downloads the checkpoint from HF.
+# capture depth for TabFM's 24-block ICL stage; --model tabfm downloads the
+# checkpoint from HF.
 out_dir: weights/tabfm
+# TabFM's fp32 checkpoint is ~6.5GB resident; a micro-batch of 8 keeps the
+# 25-depth forward well under a 24GB card (peak ~10GB at seq 1024).
+micro_batch_size: 8
+save_every: 50  # checkpoint decoders every 50 steps so a long run survives a stall
 prior:
-  # Positive int: the vendored prior gates parallel table generation on n_jobs > 1.
-  n_jobs: 16
+  # n_jobs=1 (serial prior): on the 24GB box, loky prefetch workers + the model's
+  # CUDA context crash the run; the forward is the bottleneck anyway, so serial
+  # prior generation costs little.
+  n_jobs: 1
