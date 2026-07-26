@@ -15,7 +15,7 @@ from tfm_lens.core.interventions import skip_layer
 from tfm_lens.core.logit_lens import logit_lens
 from tfm_lens.evaluation.layerwise import layerwise_auc, predict_layers
 
-BATCH = 1  # Mitra's forward_frozen splits a packed [1, seq, f] table into support/query
+BATCH = 2  # a couple of tables; forward_frozen splits each into support/query
 
 
 @pytest.fixture(scope="session")
