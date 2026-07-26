@@ -21,7 +21,12 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-_MODEL_LABELS = {"limix_2m": "LimiX-2M", "tabicl_v2": "TabICLv2", "mitra": "Mitra"}
+_MODEL_LABELS = {
+    "limix_2m": "LimiX-2M",
+    "tabicl_v2": "TabICLv2",
+    "mitra": "Mitra",
+    "tabfm": "TabFM",
+}
 
 
 def _parse_args():
