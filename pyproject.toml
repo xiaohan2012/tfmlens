@@ -54,6 +54,9 @@ tabicl = ["tabicl>=2.1"]
 # Mitra backbone (adapters/mitra.py) — vendored Tab2D. No flash_attn: we force the
 # standard-attention path so the adapter maintains one forward layout.
 mitra = ["einx", "safetensors", "huggingface-hub"]
+# TabFM backbone (adapters/tabfm.py) — vendored PyTorch TabFM (model.py is pure
+# torch) + its HF loader (safetensors: the HF mixin loads a safetensors checkpoint).
+tabfm = ["absl-py", "huggingface-hub", "safetensors"]
 
 # Pull torch from the CPU-only wheel index so CI (and local) stays light and
 # cross-platform. `explicit = true` means only packages routed here via

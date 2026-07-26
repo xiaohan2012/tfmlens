@@ -35,13 +35,19 @@ def build_adapter(model: str, ckpt: str | None, device: str):
         from tfm_lens.adapters.mitra import MitraAdapter
 
         return MitraAdapter.from_checkpoint(ckpt, device=device)
+    if model == "tabfm":
+        from tfm_lens.adapters.tabfm import TabFMAdapter
+
+        return TabFMAdapter.from_checkpoint(ckpt, device=device)
     raise SystemExit(f"unknown --model: {model}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m tfm_lens.finetune")
     parser.add_argument("--config", required=True, help="path to a TrainConfig YAML")
-    parser.add_argument("--model", choices=["limix_2m", "tabicl_v2", "mitra"], default="limix_2m")
+    parser.add_argument(
+        "--model", choices=["limix_2m", "tabicl_v2", "mitra", "tabfm"], default="limix_2m"
+    )
     parser.add_argument(
         "--ckpt",
         default=None,

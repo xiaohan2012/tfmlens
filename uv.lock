@@ -13,6 +13,15 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "absl-py"
+version = "2.5.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d0/4f/d79676ab82f2e42fc3611618139f13a9c4c31d0cff4b486982047679a802/absl_py-2.5.0.tar.gz", hash = "sha256:0c996f25c0490700fadabe6351630f6111534fa0ae252cc6d2014ea3b141135f", size = 118119, upload-time = "2026-07-03T10:57:48.157Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/58/0a/a10b45aab35b175aded078a462dc8d0c698f5b13946e7cb0869097b78bb6/absl_py-2.5.0-py3-none-any.whl", hash = "sha256:0f17b89f2a4eaaedc4f28c622998aa690564b3012a396a4ffad0821007fe03ba", size = 137410, upload-time = "2026-07-03T10:57:46.735Z" },
+]
+
+[[package]]
 name = "annotated-types"
 version = "0.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1684,6 +1693,11 @@ mitra = [
     { name = "huggingface-hub" },
     { name = "safetensors" },
 ]
+tabfm = [
+    { name = "absl-py" },
+    { name = "huggingface-hub" },
+    { name = "safetensors" },
+]
 tabicl = [
     { name = "tabicl" },
 ]
@@ -1720,6 +1734,11 @@ eval = [
 ]
 mitra = [
     { name = "einx" },
+    { name = "huggingface-hub" },
+    { name = "safetensors" },
+]
+tabfm = [
+    { name = "absl-py" },
     { name = "huggingface-hub" },
     { name = "safetensors" },
 ]
