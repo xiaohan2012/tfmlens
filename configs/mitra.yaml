@@ -1,0 +1,7 @@
+# Mitra finetune config — only the differences from the config.py defaults
+# (mix_scm prior, 200 steps, AdamW). device auto-detects. Trains one decoder per
+# capture depth for Tab2D; --model mitra downloads the checkpoint from HF.
+out_dir: weights/mitra
+prior:
+  # Positive int: the vendored prior gates parallel table generation on n_jobs > 1.
+  n_jobs: 16

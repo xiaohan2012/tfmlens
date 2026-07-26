@@ -60,6 +60,17 @@ class TestFinetuneCli:
         # ckpt omitted -> None flows through so the adapter downloads from HF.
         assert build_adapter("tabicl_v2", None, "cpu") == ("TABICL", None, "cpu")
 
+    def test_build_adapter_routes_to_mitra_passing_none_ckpt(self, monkeypatch):
+        pytest.importorskip("einx")  # the mitra group
+        import tfm_lens.adapters.mitra as mitra_mod
+
+        monkeypatch.setattr(
+            mitra_mod.MitraAdapter,
+            "from_checkpoint",
+            lambda path, device: ("MITRA", path, device),
+        )
+        assert build_adapter("mitra", None, "cpu") == ("MITRA", None, "cpu")
+
     def test_build_adapter_rejects_unknown_model(self):
         with pytest.raises(SystemExit):
             build_adapter("bogus", None, "cpu")
