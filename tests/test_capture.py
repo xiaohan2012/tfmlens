@@ -15,7 +15,9 @@ class TestCaptureLayers:
         with capture_layers(toy_adapter) as cache:
             toy_adapter.forward_frozen(toy_input, None, 5)
         assert len(cache) == toy_adapter.n_layers + 1 == 4
-        assert all(t.shape == (2, 5, ToyAdapter3D.HIDDEN) for t in cache)
+        # depth 0 is the layer's packed input (x,); depths 1+ are the layer outputs.
+        assert cache[0][0].shape == (2, 5, ToyAdapter3D.HIDDEN)
+        assert all(t.shape == (2, 5, ToyAdapter3D.HIDDEN) for t in cache[1:])
 
     def test_empty_before_forward_filled_after(self, toy_adapter, toy_input):
         with capture_layers(toy_adapter) as cache:
@@ -27,8 +29,8 @@ class TestCaptureLayers:
         blocks = toy_adapter.layers
         with capture_layers(toy_adapter) as cache:
             toy_adapter.forward_frozen(toy_input, None, 5)
-        # depth 0 = input to layer 0 (the raw embedding); depth 1 = layer 0's output.
-        torch.testing.assert_close(cache[0], toy_input)
+        # depth 0 = layer 0's packed input ((x,)); depth 1 = layer 0's output.
+        torch.testing.assert_close(cache[0][0], toy_input)
         torch.testing.assert_close(cache[1], blocks[0](toy_input))
 
     def test_captures_keyword_called_layers(self, toy_adapter_keyword_call, toy_input):
@@ -39,7 +41,7 @@ class TestCaptureLayers:
         with capture_layers(adapter) as cache:
             adapter.forward_frozen(toy_input, None, 5)
         assert len(cache) == adapter.n_layers + 1 == 4
-        torch.testing.assert_close(cache[0], toy_input)  # depth 0 = raw input
+        torch.testing.assert_close(cache[0][0], toy_input)  # depth 0 = raw input (packed)
         torch.testing.assert_close(cache[1], blocks[0](q=toy_input))  # depth 1 = layer 0 output
 
     def test_hooks_removed_on_exit(self, toy_adapter, toy_input):

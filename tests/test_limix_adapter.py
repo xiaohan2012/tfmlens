@@ -44,7 +44,7 @@ class TestLimixAdapterIntegration:
         with capture_layers(limix_adapter) as cache:
             limix_adapter.forward_frozen(X, y, eval_pos)
         assert len(cache) == 13  # input embedding + 12 layer outputs
-        assert cache[0].dim() == 4  # [batch, seq, tokens, hidden]
+        assert cache[0][0].dim() == 4  # depth 0 is the packed input; [batch, seq, tokens, hidden]
 
     def test_logit_lens_end_to_end(self, limix_adapter, table):
         X, y, eval_pos = table

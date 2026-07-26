@@ -53,7 +53,7 @@ class TestTabICLAdapterIntegration:
         with capture_layers(tabicl_adapter) as cache:
             tabicl_adapter.forward_frozen(X, y, eval_pos)
         assert len(cache) == 13  # input embedding + 12 layer outputs
-        assert cache[0].dim() == 3  # [batch, rows, hidden] — 3D residual
+        assert cache[0][0].dim() == 3  # depth 0 is the packed input; [batch, rows, hidden]
 
     def test_logit_lens_end_to_end(self, tabicl_adapter, table):
         X, y, eval_pos = table
