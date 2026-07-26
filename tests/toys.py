@@ -114,5 +114,5 @@ class ToyAdapter4D(ModelAdapter):
         h = h[:, :, -1, :]  # 4D -> 3D: keep the label token
         return h[:, eval_pos:]  # test rows (the toy has no pre-decoder norm)
 
-    def identity_forward(self, x):
-        return x, None, None  # match the layer's 3-tuple return
+    def identity_forward(self, *args, **kwargs):
+        return args[0], None, None  # match the layer's 3-tuple return

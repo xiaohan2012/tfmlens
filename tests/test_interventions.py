@@ -36,6 +36,14 @@ class TestSkipLayer:
         # output of layer 1 (depth 2) equals its input (depth 1).
         torch.testing.assert_close(cache[2], cache[1])
 
+    def test_skipped_layer_is_identity_double_stream(self, toy_adapter_double_stream, toy_input):
+        # double-stream layers return (support, query); skip must return both unchanged.
+        adapter = toy_adapter_double_stream
+        with skip_layer(adapter, 1), capture_layers(adapter) as cache:
+            adapter.forward_frozen(toy_input, None, eval_pos=3)  # 3 support rows, 2 query rows
+        # layer 1's query output (depth 2) equals its query input (depth 1).
+        torch.testing.assert_close(cache[2][1], cache[1][1])
+
     def test_restores_forward_on_exit(self, toy_adapter, toy_input):
         baseline = self._capture(toy_adapter, toy_input)
         with skip_layer(toy_adapter, 1):
