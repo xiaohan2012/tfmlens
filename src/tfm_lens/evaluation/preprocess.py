@@ -82,6 +82,47 @@ def tabicl_preprocess(X_train, y_train, X_test, categorical_idx, seed=0):
     return x_out[:eval_pos], x_out[eval_pos:]
 
 
+def tabfm_preprocess(X_train, y_train, X_test, categorical_idx, seed=0):
+    """Preprocess a (train, test) table for the frozen TabFM forward.
+
+    Reproduces one clean (no-ensemble) member of TabFM's shared preprocessing:
+
+    - ordinal-encode categoricals + mean-impute numerics (so no NaN enters the
+      numeric pipeline; TabFM's own TransformToNumerical does the same)
+    - TabFM's ``PreprocessingPipeline`` with the ``power`` normalization member
+      (CustomStandardScaler -> yeo-johnson -> log-based OutlierRemover)
+
+    Fits on the train (support) rows, transforms both. Returns ``(X_train_p,
+    X_test_p)`` float32 arrays ready for ``predict_layers``. The ensemble
+    (norm-method/shuffle/class-shift views) and the categorical embedding path
+    (cat_mask) are deferred — self-repair needs a single clean forward.
+    """
+    from sklearn.compose import ColumnTransformer
+    from sklearn.impute import SimpleImputer
+    from sklearn.preprocessing import OrdinalEncoder
+
+    from tfm_lens.vendor.tabfm.preprocess import PreprocessingPipeline
+
+    x = np.concatenate([np.asarray(X_train), np.asarray(X_test)], axis=0).astype(np.float64)
+    cat = list(categorical_idx)
+    num = [i for i in range(x.shape[1]) if i not in cat]
+    eval_pos = len(y_train)
+
+    ct = ColumnTransformer(
+        [
+            ("cat", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), cat),
+            ("num", SimpleImputer(strategy="mean"), num),
+        ]
+    )
+    ct.fit(x[:eval_pos])
+    x = np.asarray(ct.transform(x), dtype=np.float32)
+
+    pipe = PreprocessingPipeline(normalization_method="power", random_state=seed)
+    pipe.fit(x[:eval_pos])
+    x = np.asarray(pipe.transform(x), dtype=np.float32)
+    return x[:eval_pos], x[eval_pos:]
+
+
 def mitra_preprocess(X_train, y_train, X_test, categorical_idx, seed=0):
     """Preprocess a (train, test) table for the frozen Mitra forward.
 
