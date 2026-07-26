@@ -39,15 +39,16 @@ class ModelAdapter(ABC):
 
     # ---- decode-path hook (overridable) ----
     def readout(self, layer_output, eval_pos: int):
-        """One layer's raw captured output -> ``[batch, n_test, hidden]``, ready for
-        a decoder. Concretely: pick the residual stream, select the token that
-        carries the label, apply any pre-decoder norm, and keep only the test rows.
+        """A layer's raw output -> ``[batch, n_test, hidden]``, decoder-ready.
 
-        The default suits a single-stream model with no pre-decoder norm whose
-        residual is already ``[batch, seq, hidden]`` (the 3D toy / TabPFN-v1 family):
-        take the residual (unwrapping a tuple output) and slice off the support rows.
-        Override to add token selection (4D), a norm (TabICL/LimiX), or to pick a
-        second stream (Mitra's query).
+        Steps a subclass may need to override:
+
+        - pick the residual stream (unwrap a tuple output; pick a 2nd stream)
+        - select the label-bearing token (4D models)
+        - apply a pre-decoder norm (LimiX / TabICL)
+        - keep only the test rows
+
+        Default: single 3D stream, no norm — take the residual, slice test rows.
         """
         h = layer_output[0] if isinstance(layer_output, tuple) else layer_output
         return h[:, eval_pos:]

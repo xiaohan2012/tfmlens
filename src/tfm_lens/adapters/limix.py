@@ -44,6 +44,8 @@ class LimixAdapter(ModelAdapter):
         return self.model.cls_y_decoder
 
     def readout(self, out, eval_pos: int):
+        """LimiX decode path (see ModelAdapter.readout): 4D residual -> label token
+        (last on the token axis) -> encoder_out_norm -> test rows."""
         h = out[0] if isinstance(out, tuple) else out  # layer output -> residual stream
         h = h[:, :, -1, :]  # 4D -> 3D: keep the label token (last on the token axis)
         h = self.model.encoder_out_norm(h)
