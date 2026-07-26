@@ -45,6 +45,7 @@ def _parse_args():
     p.add_argument("--out", type=Path, default=Path("out/self_repair.json"))
     p.add_argument("--skip-diffs", action="store_true", help="skip ablation_diffs (scatter data)")
     p.add_argument("--device", default="cpu", help="cpu or cuda (Mitra's full tables need cuda)")
+    p.add_argument("--tasks", default=None, help="comma-separated task ids; default all 15")
     return p.parse_args()
 
 
@@ -63,9 +64,10 @@ def main():
     decoders = [d.to(args.device) for d in load_decoders(cfg["weights"], adapter)]
     preprocess = cfg["preprocess"]
 
-    n_tasks = len(TABARENA_BINARY_TASK_IDS)
+    task_ids = [int(t) for t in args.tasks.split(",")] if args.tasks else TABARENA_BINARY_TASK_IDS
+    n_tasks = len(task_ids)
     results = {}
-    for i, task_id in enumerate(TABARENA_BINARY_TASK_IDS):
+    for i, task_id in enumerate(task_ids):
         try:
             X_train, y_train, X_test, y_test, cat_idx = load_tabarena_task(task_id)
             X_train, y_train = _subsample(X_train, y_train, args.subsample_train)
