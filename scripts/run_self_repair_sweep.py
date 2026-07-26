@@ -44,6 +44,7 @@ def _parse_args():
     p.add_argument("--subsample-test", type=int, default=200, help="max test rows; 0 = all")
     p.add_argument("--out", type=Path, default=Path("out/self_repair.json"))
     p.add_argument("--skip-diffs", action="store_true", help="skip ablation_diffs (scatter data)")
+    p.add_argument("--device", default="cpu", help="cpu or cuda (Mitra's full tables need cuda)")
     return p.parse_args()
 
 
@@ -58,8 +59,8 @@ def _subsample(X, y, n):
 def main():
     args = _parse_args()
     cfg = MODELS[args.model]
-    adapter = build_adapter(args.model, None, "cpu")  # ckpt=None -> download / cache
-    decoders = load_decoders(cfg["weights"], adapter)
+    adapter = build_adapter(args.model, None, args.device)  # ckpt=None -> download / cache
+    decoders = [d.to(args.device) for d in load_decoders(cfg["weights"], adapter)]
     preprocess = cfg["preprocess"]
 
     n_tasks = len(TABARENA_BINARY_TASK_IDS)
