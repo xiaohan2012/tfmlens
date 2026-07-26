@@ -9,13 +9,6 @@ ensemble is deferred.
 
 import numpy as np
 
-from tfm_lens.vendor.limix.preprocess import (
-    CategoricalFeatureEncoder,
-    FeatureShuffler,
-    FilterValidFeatures,
-    RebalanceFeatureDistribution,
-)
-
 # worker ① of LimiX's cls_default_noretrieval.json
 _WORKER_CONFIG = {
     "RebalanceFeatureDistribution": {
@@ -36,6 +29,13 @@ def limix_preprocess(X_train, y_train, X_test, categorical_idx, seed=0):
     — and transforms both. Returns ``(X_train_p, X_test_p)`` float32 arrays ready
     for ``predict_layers``.
     """
+    from tfm_lens.vendor.limix.preprocess import (
+        CategoricalFeatureEncoder,
+        FeatureShuffler,
+        FilterValidFeatures,
+        RebalanceFeatureDistribution,
+    )
+
     x = np.concatenate([np.asarray(X_train), np.asarray(X_test)], axis=0).astype(np.float32)
     cat = list(categorical_idx)
     y = np.asarray(y_train)
@@ -80,3 +80,37 @@ def tabicl_preprocess(X_train, y_train, X_test, categorical_idx, seed=0):
     pipe.fit(x_num[:eval_pos])
     x_out = np.asarray(pipe.transform(x_num), dtype=np.float32)
     return x_out[:eval_pos], x_out[eval_pos:]
+
+
+def mitra_preprocess(X_train, y_train, X_test, categorical_idx, seed=0):
+    """Preprocess a (train, test) table for the frozen Mitra forward.
+
+    Thin on purpose — Mitra runs its quantile transform inside the model
+    (use_quantile_transformer defaults to False), so here we only:
+
+    - ordinal-encode the categorical columns
+    - mean-impute the numeric columns
+    - zero out any nan/inf
+
+    Fits on the train rows, transforms both. Returns ``(X_train_p, X_test_p)``
+    float32; the model's Tab2DQuantileEmbeddingX does the quantile step.
+    """
+    from sklearn.compose import ColumnTransformer
+    from sklearn.impute import SimpleImputer
+    from sklearn.preprocessing import OrdinalEncoder
+
+    x = np.concatenate([np.asarray(X_train), np.asarray(X_test)], axis=0).astype(np.float64)
+    cat = list(categorical_idx)
+    num = [i for i in range(x.shape[1]) if i not in cat]
+    eval_pos = len(y_train)
+
+    ct = ColumnTransformer(
+        [
+            ("cat", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), cat),
+            ("num", SimpleImputer(strategy="mean"), num),
+        ]
+    )
+    ct.fit(x[:eval_pos])
+    x = np.asarray(ct.transform(x), dtype=np.float32)
+    x[~np.isfinite(x)] = 0.0  # nan/inf -> 0
+    return x[:eval_pos], x[eval_pos:]

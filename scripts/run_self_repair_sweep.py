@@ -25,7 +25,7 @@ import torch
 
 from tfm_lens.evaluation.datasets import TABARENA_BINARY_TASK_IDS, load_tabarena_task
 from tfm_lens.evaluation.layerwise import load_decoders
-from tfm_lens.evaluation.preprocess import limix_preprocess, tabicl_preprocess
+from tfm_lens.evaluation.preprocess import limix_preprocess, mitra_preprocess, tabicl_preprocess
 from tfm_lens.evaluation.self_repair import ablation_diffs, ablation_sweep, native_final_auc
 from tfm_lens.finetune.__main__ import build_adapter
 
@@ -33,6 +33,7 @@ SEED = 0
 MODELS = {
     "limix_2m": {"weights": Path("weights/limix_2m"), "preprocess": limix_preprocess},
     "tabicl_v2": {"weights": Path("weights/tabicl_v2"), "preprocess": tabicl_preprocess},
+    "mitra": {"weights": Path("weights/mitra"), "preprocess": mitra_preprocess},
 }
 
 
