@@ -27,3 +27,21 @@ def test_tabicl_preprocess_shapes_dtype_finite():
     assert Xtr_p.shape[1] == Xte_p.shape[1] == n_feat  # columns preserved
     assert Xtr_p.dtype == np.float32 and Xte_p.dtype == np.float32
     assert np.isfinite(Xtr_p).all() and np.isfinite(Xte_p).all()
+
+
+def test_mitra_preprocess_shapes_dtype_finite():
+    from tfm_lens.evaluation.preprocess import mitra_preprocess
+
+    rng = np.random.default_rng(0)
+    n_train, n_test, n_feat = 40, 15, 5
+    x = rng.normal(size=(n_train + n_test, n_feat))
+    x[:, 2] = rng.integers(0, 3, size=n_train + n_test)  # column 2 is categorical
+    X_train, X_test = x[:n_train], x[n_train:]
+    y_train = rng.integers(0, 2, size=n_train)
+
+    Xtr_p, Xte_p = mitra_preprocess(X_train, y_train, X_test, categorical_idx=[2])
+
+    assert Xtr_p.shape[0] == n_train and Xte_p.shape[0] == n_test  # rows preserved
+    assert Xtr_p.shape[1] == Xte_p.shape[1] == n_feat  # columns preserved
+    assert Xtr_p.dtype == np.float32 and Xte_p.dtype == np.float32
+    assert np.isfinite(Xtr_p).all() and np.isfinite(Xte_p).all()
