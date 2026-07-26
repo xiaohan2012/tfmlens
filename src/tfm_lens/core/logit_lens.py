@@ -14,10 +14,8 @@ def logit_lens(cache, decoders, adapter, eval_pos):
     ``[batch, n_test, n_classes]``.
     """
     preds = []
-    for emb, decoder in zip(cache, decoders, strict=True):
-        h = adapter.select_label_token(emb)  # -> [batch, seq, hidden]
-        h = adapter.post_norm(h)
-        h = h[:, eval_pos:]  # keep only the test rows
+    for raw, decoder in zip(cache, decoders, strict=True):
+        h = adapter.readout(raw, eval_pos)  # raw layer output -> [batch, n_test, hidden]
         if adapter.needs_transpose:
             preds.append(decoder(h.transpose(0, 1)).transpose(0, 1))
         else:

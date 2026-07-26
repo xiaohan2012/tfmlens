@@ -109,8 +109,10 @@ class ToyAdapter4D(ModelAdapter):
         self.backbone = self.backbone.to(device)
         return self
 
-    def select_label_token(self, emb):
-        return emb[:, :, -1, :]  # 4D -> 3D: keep the label token
+    def readout(self, out, eval_pos):
+        h = out[0] if isinstance(out, tuple) else out  # layer output -> residual stream
+        h = h[:, :, -1, :]  # 4D -> 3D: keep the label token
+        return h[:, eval_pos:]  # test rows (the toy has no pre-decoder norm)
 
     def identity_forward(self, x):
         return x, None, None  # match the layer's 3-tuple return

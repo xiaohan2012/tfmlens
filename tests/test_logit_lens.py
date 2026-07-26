@@ -2,7 +2,7 @@
 
 The same logit_lens must handle both the toy (3D, [batch, seq, hidden]) and the
 4D family (LimiX / TabPFN v2, [batch, seq, tokens, hidden]); the model-specific
-bits live behind the adapter (select_label_token / post_norm / needs_transpose).
+bits live behind the adapter (readout / needs_transpose).
 """
 
 import pytest
@@ -40,18 +40,19 @@ class TestLogitLens:
         preds = logit_lens(cache, toy_decoders, toy_adapter, eval_pos=4)
         assert preds[0].shape[1] == 5 - 4 == 1
 
-    def test_4d_reads_the_label_token(self, toy_adapter_4d):
-        # token t is filled with value t; the label token is the last one.
+    def test_4d_readout_reads_the_label_token(self, toy_adapter_4d):
+        # token t is filled with value t; readout keeps the last (label) token.
         hidden, tokens = ToyAdapter4D.HIDDEN, ToyAdapter4D.TOKENS
         per_token = torch.stack([torch.full((hidden,), float(t)) for t in range(tokens)])
         emb = per_token.reshape(1, 1, tokens, hidden).expand(1, 3, tokens, hidden).clone()
-        h = toy_adapter_4d.select_label_token(emb)  # -> (1, 3, hidden)
+        h = toy_adapter_4d.readout(emb, eval_pos=0)  # -> (1, 3, hidden)
         torch.testing.assert_close(h, torch.full((1, 3, hidden), float(tokens - 1)))
 
-    def test_post_norm_applied(self):
+    def test_readout_result_flows_into_decoder(self):
         class DoublingAdapter(ToyAdapter3D):
-            def post_norm(self, emb):
-                return emb * 2
+            def readout(self, out, eval_pos):
+                h = out[0] if isinstance(out, tuple) else out
+                return h[:, eval_pos:] * 2
 
         adapter = DoublingAdapter()
         emb = torch.ones(1, 3, ToyAdapter3D.HIDDEN)  # (batch, seq, hidden)

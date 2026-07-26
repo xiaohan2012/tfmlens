@@ -43,11 +43,11 @@ class LimixAdapter(ModelAdapter):
     def decoder_template(self):
         return self.model.cls_y_decoder
 
-    def select_label_token(self, emb):
-        return emb[:, :, -1, :]  # 4D -> 3D: keep the label token
-
-    def post_norm(self, emb):
-        return self.model.encoder_out_norm(emb)
+    def readout(self, out, eval_pos: int):
+        h = out[0] if isinstance(out, tuple) else out  # layer output -> residual stream
+        h = h[:, :, -1, :]  # 4D -> 3D: keep the label token (last on the token axis)
+        h = self.model.encoder_out_norm(h)
+        return h[:, eval_pos:]  # keep only the test rows
 
     def identity_forward(self, x):
         return x, None, None  # LimiX layers return (residual, feat_attn, sample_attn)
