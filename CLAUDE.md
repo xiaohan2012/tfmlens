@@ -60,6 +60,27 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. Comments & Docstrings
+
+**Comments and docstrings should scan fast: terse and structured, not prose.**
+
+- Don't line-wrap a sentence to fill the width — wrapped prose is hard to scan.
+- Use bullets for parallel points or mappings, not one dense block.
+- Cut words. Say it once.
+
+Example — before (wrapped prose, no structure):
+
+    # Retry the request when it fails: wait a bit and try again, up to three
+    # times, doubling the wait each time, and if every attempt still fails
+    # raise the last error so the caller can handle it.
+
+After (one-line intent + bullets):
+
+    # Retry the request with backoff:
+    # - up to 3 attempts
+    # - wait doubles each time
+    # - re-raise the last error if all fail
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
