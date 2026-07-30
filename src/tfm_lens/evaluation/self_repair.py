@@ -1,17 +1,27 @@
 """Ablation sweep for the self-repair analysis.
 
-Runs the frozen forward once per condition — baseline, then skipping each layer
-in turn — decoding every depth with the fine-tuned decoders and scoring test-row
-AUC. Reuses predict_layers / layerwise_auc; the skip is orthogonal (skip_layer
-just wraps the same call).
+One frozen forward per condition (baseline, then skip each layer), decode every
+depth with the fine-tuned decoders, reduce to all metrics off the same logits.
+
+- per-depth metrics: AUC / GT-logit / margin (one forward feeds all).
+- ``zscore``: clean-baseline (mu, sigma) for cross-task GT-logit normalization.
+- skip is orthogonal — ``skip_layer`` wraps the same forward.
 """
 
 import numpy as np
 import torch
+from scipy.special import softmax
 
 from tfm_lens.adapters.base import ModelAdapter
 from tfm_lens.core.interventions import skip_layer
-from tfm_lens.evaluation.layerwise import layerwise_auc, predict_layers
+from tfm_lens.evaluation.layerwise import (
+    gt_logit_zscore_stats,
+    layerwise_auc,
+    layerwise_gt_logit,
+    layerwise_margin,
+    predict_layers,
+    predict_layers_logits,
+)
 
 
 def native_final_auc(
@@ -48,7 +58,7 @@ def ablation_diffs(
     immediate drop, small final drop.
     """
     sweep = ablation_sweep(adapter, decoders, X_train, y_train, X_test, y_test, n_classes)
-    baseline_ft = sweep["baseline"]
+    baseline_ft = sweep["baseline"]["auc"]
     baseline_main = native_final_auc(adapter, X_train, y_train, X_test, y_test, n_classes)
     m_norm = max(baseline_main, 0.5)
 
@@ -56,10 +66,19 @@ def ablation_diffs(
     for m in range(adapter.n_layers):
         with skip_layer(adapter, m):
             ablated_main = native_final_auc(adapter, X_train, y_train, X_test, y_test, n_classes)
-        immediate = (sweep["skip"][m][m + 1] - baseline_ft[m + 1]) / m_norm
+        immediate = (sweep["skip"][m]["auc"][m + 1] - baseline_ft[m + 1]) / m_norm
         final = (ablated_main - baseline_main) / m_norm
         diffs.append((m, float(immediate), float(final)))
     return diffs
+
+
+def _all_metrics(logits: list[np.ndarray], y_test: np.ndarray) -> dict[str, list[float]]:
+    """Every per-depth metric off one forward's logits (binary tasks)."""
+    return {
+        "auc": layerwise_auc([softmax(z, axis=1) for z in logits], y_test),
+        "gt_logit": layerwise_gt_logit(logits, y_test),
+        "margin": layerwise_margin(logits, y_test),
+    }
 
 
 def ablation_sweep(
@@ -71,18 +90,26 @@ def ablation_sweep(
     y_test: np.ndarray,
     n_classes: int,
 ) -> dict:
-    """Baseline + skip-each-layer per-depth AUC trajectories for one table.
+    """Baseline + skip-each-layer per-depth metric trajectories for one table.
 
-    Returns ``{"baseline": [auc per depth], "skip": {layer: [auc per depth]}}``.
+    One forward per condition feeds every metric. Returns::
+
+        {"baseline": {metric: [per depth]},
+         "skip": {layer: {metric: [per depth]}},
+         "zscore": {"mu": float, "sigma": float}}
+
+    ``metric`` in {auc, gt_logit, margin}; ``zscore`` = clean-baseline stats for
+    cross-task GT-logit normalization.
     """
 
-    def _aucs():
-        probs = predict_layers(adapter, decoders, X_train, y_train, X_test, n_classes)
-        return layerwise_auc(probs, y_test)
+    def _logits():
+        return predict_layers_logits(adapter, decoders, X_train, y_train, X_test, n_classes)
 
-    baseline = _aucs()
+    base_logits = _logits()
+    baseline = _all_metrics(base_logits, y_test)
+    mu, sigma = gt_logit_zscore_stats(base_logits, y_test)
     skip = {}
     for m in range(adapter.n_layers):
         with skip_layer(adapter, m):
-            skip[m] = _aucs()
-    return {"baseline": baseline, "skip": skip}
+            skip[m] = _all_metrics(_logits(), y_test)
+    return {"baseline": baseline, "skip": skip, "zscore": {"mu": mu, "sigma": sigma}}
