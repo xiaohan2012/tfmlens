@@ -29,7 +29,7 @@ def test_predict_layers_returns_valid_probs_per_depth(toy_adapter, toy_decoders)
 
 
 def test_predict_layers_is_softmax_of_logits(toy_adapter, toy_decoders):
-    # predict_layers == softmax(predict_layers_logits); scipy softmax as independent oracle.
+    # predict_layers delegates to predict_layers_logits then softmaxes — same forward, same slice.
     f, c = ToyAdapter3D.HIDDEN, ToyAdapter3D.N_CLASSES
     torch.manual_seed(0)
     X_train, y_train = torch.randn(5, f), torch.randint(0, c, (5,))

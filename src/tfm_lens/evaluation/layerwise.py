@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from scipy.special import softmax
 from sklearn.metrics import roc_auc_score
 
 from tfm_lens.adapters.base import ModelAdapter
@@ -59,12 +60,6 @@ def predict_layers_logits(
         return [p[0, :, :n_classes].float().cpu().numpy() for p in preds]
 
 
-def _softmax(logits: np.ndarray) -> np.ndarray:
-    """Row-wise softmax, numerically stable."""
-    e = np.exp(logits - logits.max(axis=1, keepdims=True))
-    return e / e.sum(axis=1, keepdims=True)
-
-
 def predict_layers(
     adapter: ModelAdapter,
     decoders: list[torch.nn.Module],
@@ -75,7 +70,7 @@ def predict_layers(
 ) -> list[np.ndarray]:
     """Softmax of :func:`predict_layers_logits`: probabilities ``[n_test, n_classes]`` per depth."""
     logits = predict_layers_logits(adapter, decoders, X_train, y_train, X_test, n_classes)
-    return [_softmax(z) for z in logits]
+    return [softmax(z, axis=1) for z in logits]
 
 
 def layerwise_auc(probs: list[np.ndarray], y_test: np.ndarray) -> list[float]:
@@ -91,14 +86,18 @@ def layerwise_auc(probs: list[np.ndarray], y_test: np.ndarray) -> list[float]:
     return scores
 
 
+def _gt_logit(z: np.ndarray, y_test: np.ndarray) -> np.ndarray:
+    """True-class logit per row: ``z[i, y[i]]`` (``y_test`` must be an array)."""
+    return z[np.arange(y_test.shape[0]), y_test]
+
+
 def layerwise_gt_logit(logits: list[np.ndarray], y_test: np.ndarray) -> list[float]:
     """Per depth: mean over test rows of the true-class raw logit.
 
     Fixed coordinate (one-hot GT projection) -> additive -> feeds DE/IE; any class count.
     """
     y_test = np.asarray(y_test)
-    rows = np.arange(y_test.shape[0])
-    return [float(z[rows, y_test].mean()) for z in logits]
+    return [float(_gt_logit(z, y_test).mean()) for z in logits]
 
 
 def layerwise_margin(logits: list[np.ndarray], y_test: np.ndarray) -> list[float]:
@@ -107,12 +106,11 @@ def layerwise_margin(logits: list[np.ndarray], y_test: np.ndarray) -> list[float
     Raises on multiclass: the 'max other' competitor drifts across runs -> not a fixed coordinate.
     """
     y_test = np.asarray(y_test)
-    rows = np.arange(y_test.shape[0])
     scores = []
     for z in logits:
         if z.shape[1] != 2:
             raise ValueError(f"layerwise_margin is binary-only; got {z.shape[1]} classes")
-        scores.append(float((z[rows, y_test] - z[rows, 1 - y_test]).mean()))
+        scores.append(float((_gt_logit(z, y_test) - _gt_logit(z, 1 - y_test)).mean()))
     return scores
 
 
@@ -126,8 +124,7 @@ def gt_logit_zscore_stats(
     - raises if sigma == 0 (degenerate task).
     """
     y_test = np.asarray(y_test)
-    rows = np.arange(y_test.shape[0])
-    gt = clean_logits[-1][rows, y_test]
+    gt = _gt_logit(clean_logits[-1], y_test)
     mu, sigma = float(gt.mean()), float(gt.std())
     if sigma == 0.0:
         raise ValueError("degenerate task: final-layer GT-logit has zero spread across rows")
