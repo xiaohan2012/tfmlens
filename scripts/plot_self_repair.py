@@ -1,17 +1,17 @@
 """Plot the exp6 self-repair trajectories (paper Figure 8) from the sweep JSON.
 
-Reads ``out/self_repair.json`` (written by run_self_repair_sweep.py). Per dataset every
-trajectory is normalized by that dataset's native final-layer AUC (floored 0.5),
-then averaged across datasets. Draws:
+Reads the sweep JSON (run_self_repair_sweep.py); per dataset normalize each
+trajectory for ``--metric`` (auc: / native final AUC floored 0.5; gt_logit:
+per-task z-score with the clean-baseline mu/sigma), then average across datasets.
+Draws:
 
-  - black baseline: the fine-tuned decode per depth, no ablation
-  - one colored line per ablated layer m, from depth m+1 onward (post-skip)
-  - a dashed red-x connector marking the immediate drop at depth m+1
+- black baseline: fine-tuned decode per depth, no ablation.
+- one colored line per ablated layer m, from depth m+1 onward (post-skip).
+- a dashed red-x connector marking the immediate drop at depth m+1.
 
-Self-repair shows up as a sharp drop right after the skipped layer that the
-later layers partly recover.
+Self-repair = a sharp drop right after the skipped layer that later layers recover.
 
-    uv run --group viz python scripts/plot_self_repair.py
+    uv run --group viz python scripts/plot_self_repair.py --metric gt_logit
 """
 
 import argparse
@@ -28,35 +28,59 @@ _MODEL_LABELS = {
     "tabfm": "TabFM",
 }
 
+_METRIC_YLABEL = {
+    "auc": "Normalized performance (ROC-AUC)",
+    "gt_logit": "GT-logit (z-scored, σ)",
+}
+
 
 def _parse_args():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--in", dest="inp", type=Path, default=Path("out/self_repair.json"))
     p.add_argument("--out", type=Path, default=Path("out/self_repair_fig8.png"))
     p.add_argument("--model", choices=list(_MODEL_LABELS), default="limix_2m", help="title label")
+    p.add_argument("--metric", choices=list(_METRIC_YLABEL), default="auc", help="y-axis metric")
     return p.parse_args()
 
 
-def _normalized(results):
-    """-> (baseline_mean, skip_mean) arrays averaged over datasets.
+def _normalize_task(sweep, native_final, metric):
+    """One task's ``(baseline, skips)`` trajectories, normalized for ``metric``.
+
+    - auc: divide by native final AUC (floored 0.5).
+    - gt_logit: per-task z-score with the stored clean-baseline (mu, sigma).
+    """
+
+    def norm(arr):
+        arr = np.array(arr)
+        if metric == "auc":
+            return arr / max(native_final, 0.5)
+        z = sweep["zscore"]
+        return (arr - z["mu"]) / z["sigma"]
+
+    skip = sweep["skip"]
+    baseline = norm(sweep["baseline"][metric])
+    skips = np.array([norm(skip[str(m)][metric]) for m in range(len(skip))])
+    return baseline, skips
+
+
+def _normalized(results, metric):
+    """-> (baseline_mean, skip_mean) averaged over datasets, normalized for ``metric``.
 
     ``baseline_mean`` is ``[n_depths]``; ``skip_mean`` is ``[n_layers, n_depths]``
-    (row m = trajectory with layer m skipped). Each dataset normalized by its
-    native final AUC (floored 0.5) before averaging.
+    (row m = trajectory with layer m skipped).
     """
     baselines, skips = [], []
     for r in results.values():
-        norm = max(r["native_final"], 0.5)
-        baselines.append(np.array(r["sweep"]["baseline"]) / norm)
-        skip = r["sweep"]["skip"]
-        skips.append(np.array([skip[str(m)] for m in range(len(skip))]) / norm)
+        b, s = _normalize_task(r["sweep"], r["native_final"], metric)
+        baselines.append(b)
+        skips.append(s)
     return np.mean(baselines, axis=0), np.mean(skips, axis=0)
 
 
 def main():
     args = _parse_args()
     results = json.loads(args.inp.read_text())
-    baseline, skip = _normalized(results)
+    baseline, skip = _normalized(results, args.metric)
     n_depths = len(baseline)
     n_layers = skip.shape[0]
     depths = np.arange(n_depths)
@@ -91,8 +115,11 @@ def main():
         ax.plot(m + 1, skip[m][m + 1], "x", color="red", markersize=4, markeredgewidth=1)
 
     ax.set_xlabel("Layer (forward-pass order)")
-    ax.set_ylabel("Normalized performance (ROC-AUC)")
-    ax.set_title(f"{_MODEL_LABELS[args.model]} self-repair ({len(results)} TabArena binary tasks)")
+    ax.set_ylabel(_METRIC_YLABEL[args.metric])
+    ax.set_title(
+        f"{_MODEL_LABELS[args.model]} self-repair · {args.metric} "
+        f"({len(results)} TabArena binary tasks)"
+    )
     ax.legend(loc="lower right")
 
     sm = plt.cm.ScalarMappable(cmap="viridis", norm=plt.Normalize(0, n_layers - 1))

@@ -102,8 +102,9 @@ def main():
             if not args.skip_diffs:
                 entry["diffs"] = ablation_diffs(*sweep_args)
             results[str(task_id)] = entry
+            final_auc = sweep["baseline"]["auc"][-1]
             print(
-                f"[{i + 1}/{n_tasks}] task {task_id}: final AUC {sweep['baseline'][-1]:.3f} | "
+                f"[{i + 1}/{n_tasks}] task {task_id}: final AUC {final_auc:.3f} | "
                 f"native {native_final:.3f} | rows {len(X_train)}+{len(X_test)}",
                 flush=True,
             )
