@@ -9,8 +9,9 @@ Every gotcha below was learned the hard way.
 - Run every long job inside tmux.
 
 ## 1. Connect to the box
-SSH in using the **`arena_key`** private key (its public half is registered on the
-vast instance):
+SSH in using the private key whose public half is registered on the vast
+instance. In this setup that key is **`arena_key`**, but **the name depends on
+your setup** — if the connection fails, ask the user which key to use:
 
 ```bash
 ssh -i ~/.ssh/arena_key <user>@<host> -p <port>
