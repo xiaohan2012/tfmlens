@@ -4,6 +4,8 @@ Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-s
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
+**Project context:** working on a self-repair issue (#34–#37)? Read [`docs/self-repair.md`](docs/self-repair.md) first — it defines TE / DE / IE, logit lens, path patching, and the dependency map.
+
 ## 1. Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**
