@@ -8,7 +8,23 @@ Every gotcha below was learned the hard way.
 - Reference spec: RTX 4090 / 24GB VRAM / 62GB RAM (cgroup limit ~64.6GB) / 16 CPU
 - Run every long job inside tmux.
 
-## 1. Install deps — key trap: never `uv sync` on a GPU box
+## 1. Connect to the box
+SSH in using the **`arena_key`** private key (its public half is registered on the
+vast instance):
+
+```bash
+ssh -i ~/.ssh/arena_key <user>@<host> -p <port>
+# or add it to ~/.ssh/config so plain `ssh <host>` works:
+#   Host <host>
+#     User <user>
+#     Port <port>
+#     IdentityFile ~/.ssh/arena_key
+```
+
+The same key is used for `scp` when copying results back (§5): pass `-i
+~/.ssh/arena_key`.
+
+## 2. Install deps — key trap: never `uv sync` on a GPU box
 tfmlens's `pyproject.toml` pins torch to the CPU wheel index
 (`[tool.uv.sources] torch = pytorch-cpu`, to keep local/CI light). So `uv sync`
 overwrites CUDA torch with the CPU build and the GPU sits idle.
