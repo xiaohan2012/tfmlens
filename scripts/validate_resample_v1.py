@@ -121,11 +121,19 @@ def _median(t):
 
 
 def _model_stats(adapter, tables, target_idxs, args):
-    """Per-layer ③/①/② aggregated over targets x donors for one model."""
+    """Per-layer ③ (residual-norm) + ② (cosine) for one model.
+
+    ③ is aggregated **per table** (the 8 donors are averaged within a table, per the
+    N=8 design), and every table's per-layer value is kept — so the plot can draw a
+    median line + IQR/min-max band showing cross-dataset spread. zero is
+    donor-independent → one value per table. ② stays a mean over table x donor.
+    """
     device = args.device
     li = adapter.label_token_index
     n_layers = adapter.n_layers
-    rz, rr, nr, cosA, cosB = ([[] for _ in range(n_layers)] for _ in range(5))
+    zero_tbl = [[] for _ in range(n_layers)]  # zero_tbl[m] = one ratio per table
+    res_tbl = [[] for _ in range(n_layers)]  # res_tbl[m]  = donor-mean ratio per table
+    nr, cosA, cosB = ([[] for _ in range(n_layers)] for _ in range(3))
 
     for ti in target_idxs:
         Xtr, ytr, Xte = tables[ti]
@@ -133,9 +141,11 @@ def _model_stats(adapter, tables, target_idxs, args):
         r_in = [adapter.residual_of(cache[m]) for m in range(n_layers)]
         r_out = [adapter.residual_of(cache[m + 1]) for m in range(n_layers)]
         native = [_sub(r_out[m], r_in[m]) for m in range(n_layers)]
+        clean_n = [_norm(r_out[m], ep_t, li) for m in range(n_layers)]
 
         donors = [j for j in range(len(tables)) if j != ti]
         picks = np.random.default_rng(SEED).permutation(donors)[: args.n_donors]
+        res_per_donor = []  # [n_donors, n_layers] for this table
         for di, dj in enumerate(picks):
             Xd_tr, yd_tr, Xd_te = tables[dj]
             d_deltas = donor_deltas(
@@ -145,26 +155,29 @@ def _model_stats(adapter, tables, target_idxs, args):
                 Xd_tr.shape[0],
             )
             draw = np.random.default_rng(SEED + 1 + di)
+            res_m = []
             for m in range(n_layers):
                 dd = build_donor_delta(r_in[m], d_deltas[m], ep_t, Xd_tr.shape[0], li, draw)
-                clean_n = _norm(r_out[m], ep_t, li)
-                # ③ zero doesn't depend on the donor, but re-add per donor is cheap/harmless.
-                rz[m].append(_median(_norm(r_in[m], ep_t, li) / clean_n))
-                rr[m].append(_median(_norm(_add(r_in[m], dd), ep_t, li) / clean_n))
-                nat_dec = _decoded(native[m], ep_t, li)
-                don_dec = _decoded(dd, ep_t, li)
+                res_m.append(_median(_norm(_add(r_in[m], dd), ep_t, li) / clean_n[m]))
+                nat_dec, don_dec = _decoded(native[m], ep_t, li), _decoded(dd, ep_t, li)
                 nr[m].append(
                     _median(torch.linalg.norm(don_dec, dim=-1) / torch.linalg.norm(nat_dec, dim=-1))
                 )
                 cosB[m].append(_median(torch.cosine_similarity(don_dec, nat_dec, dim=-1)))
                 perm = torch.randperm(nat_dec.shape[0])
                 cosA[m].append(_median(torch.cosine_similarity(nat_dec, nat_dec[perm], dim=-1)))
+            res_per_donor.append(res_m)
+        res_mean = np.mean(res_per_donor, axis=0)  # donor-mean per layer, this table
+        for m in range(n_layers):
+            zero_tbl[m].append(_median(_norm(r_in[m], ep_t, li) / clean_n[m]))  # donor-independent
+            res_tbl[m].append(float(res_mean[m]))
 
     agg = lambda rows: [float(np.mean(r)) for r in rows]  # noqa: E731
     return {
-        "ratio_zero": agg(rz),
-        "ratio_resample": agg(rr),
-        "norm_ratio": agg(nr),
+        "ratio_zero_tbl": zero_tbl,  # [n_layers][n_tables] — for median + band
+        "ratio_resample_tbl": res_tbl,
+        "ratio_zero": [float(np.median(r)) for r in zero_tbl],  # summary median line
+        "ratio_resample": [float(np.median(r)) for r in res_tbl],
         "cos_within": agg(cosA),
         "cos_cross": agg(cosB),
     }
@@ -210,13 +223,13 @@ def main():
                 print(f"{model} load {tid}: FAILED {type(exc).__name__}: {exc}", flush=True)
         s = _model_stats(adapter, tables, list(range(len(tables))), args)
         stats[model] = s
-        # ①/② one-line summary (median over layers)
+        # ②/③ one-line summary (median over layers / tables)
         cc, cw = np.median(s["cos_cross"]), np.median(s["cos_within"])
+        zmin = min(s["ratio_zero"])
         print(
-            f"{model}: ① norm_ratio med={np.median(s['norm_ratio']):.2f} | "
-            f"② cos cross={cc:.2f} vs within={cw:.2f} | "
-            f"③ resample@last={s['ratio_resample'][-1]:.2f} "
-            f"zero@last={s['ratio_zero'][-1]:.2f}",
+            f"{model}: ② cos cross={cc:.2f} vs within={cw:.2f} | "
+            f"③ resample median-line min={min(s['ratio_resample']):.2f} "
+            f"zero median-line min={zmin:.2f}",
             flush=True,
         )
         del adapter
