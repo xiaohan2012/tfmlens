@@ -10,10 +10,17 @@ Defaults subsample to a fast CPU pass. For the full run pass 0 to both subsample
 flags; ``--skip-diffs`` drops the (expensive) scatter data so a full pass only
 pays for the Figure-8 trajectories.
 
+``--ablation resample`` (#35) swaps zero/skip for **cross-table resample**: each
+target's donors are the other loaded tasks (leave-one-out), ``--n-donors`` drawn
+without replacement, metric averaged over donors. On-distribution + norm-preserving;
+run it alongside the default ``zero`` for the skip-vs-resample cross-check.
+
     uv run --group eval python scripts/run_self_repair_sweep.py --model limix_2m
     uv run --group tabicl --group eval python scripts/run_self_repair_sweep.py \
         --model tabicl_v2 --subsample-train 0 --subsample-test 0 --skip-diffs \
         --out out/self_repair_tabicl.json
+    uv run --group eval python scripts/run_self_repair_sweep.py --model limix_2m \
+        --ablation resample --out out/self_repair_limix_resample.json
 """
 
 import argparse
@@ -52,6 +59,18 @@ def _parse_args():
     p.add_argument("--skip-diffs", action="store_true", help="skip ablation_diffs (scatter data)")
     p.add_argument("--device", default="cpu", help="cpu or cuda (Mitra's full tables need cuda)")
     p.add_argument("--tasks", default=None, help="comma-separated task ids; default all 15")
+    p.add_argument(
+        "--ablation", choices=["zero", "resample"], default="zero", help="ablation mode (#35)"
+    )
+    p.add_argument(
+        "--donor",
+        choices=["table", "row", "feature"],
+        default="table",
+        help="resample donor source",
+    )
+    p.add_argument(
+        "--n-donors", type=int, default=8, help="resample: donors drawn per target (LOO)"
+    )
     return p.parse_args()
 
 
@@ -63,8 +82,34 @@ def _subsample(X, y, n):
     return X[idx], y[idx]
 
 
+def _load_record(task_id, preprocess, args):
+    """Load -> subsample -> 0-index labels -> preprocess -> tensors for one task."""
+    X_train, y_train, X_test, y_test, cat_idx = load_tabarena_task(task_id)
+    X_train, y_train = _subsample(X_train, y_train, args.subsample_train)
+    X_test, y_test = _subsample(X_test, y_test, args.subsample_test)
+    # 0-index the labels: TabICL's one-hot y_encoder needs contiguous ints; harmless
+    # for LimiX since binary labels are already 0/1.
+    classes = np.unique(y_train)
+    y_train = np.searchsorted(classes, y_train)
+    y_test = np.searchsorted(classes, y_test)
+    X_train_p, X_test_p = preprocess(X_train, y_train, X_test, cat_idx)
+    return {
+        "Xtr": torch.tensor(X_train_p),
+        "ytr": torch.tensor(y_train).float(),
+        "Xte": torch.tensor(X_test_p),
+        "y_test": y_test,
+        "n_classes": len(classes),
+        "n_train": int(len(X_train)),
+        "n_test": int(len(X_test)),
+    }
+
+
 def main():
     args = _parse_args()
+    if args.ablation == "resample" and args.donor != "table":
+        raise NotImplementedError(
+            f"--donor {args.donor} not implemented; only 'table' (cross-table)"
+        )
     cfg = MODELS[args.model]
     adapter = build_adapter(args.model, None, args.device)  # ckpt=None -> download / cache
     decoders = [d.to(args.device) for d in load_decoders(cfg["weights"], adapter)]
@@ -72,45 +117,63 @@ def main():
 
     task_ids = [int(t) for t in args.tasks.split(",")] if args.tasks else TABARENA_BINARY_TASK_IDS
     n_tasks = len(task_ids)
-    results = {}
-    for i, task_id in enumerate(task_ids):
+
+    # Load every task up front — resample needs the other tables as leave-one-out donors.
+    records = {}
+    for task_id in task_ids:
         try:
-            X_train, y_train, X_test, y_test, cat_idx = load_tabarena_task(task_id)
-            X_train, y_train = _subsample(X_train, y_train, args.subsample_train)
-            X_test, y_test = _subsample(X_test, y_test, args.subsample_test)
-            # 0-index the labels: TabICL's one-hot y_encoder needs contiguous ints;
-            # harmless for LimiX since binary labels are already 0/1.
-            classes = np.unique(y_train)
-            y_train = np.searchsorted(classes, y_train)
-            y_test = np.searchsorted(classes, y_test)
-            X_train_p, X_test_p = preprocess(X_train, y_train, X_test, cat_idx)
+            records[task_id] = _load_record(task_id, preprocess, args)
+        except Exception as exc:  # keep going so one bad table can't sink the run
+            print(f"load task {task_id}: FAILED {type(exc).__name__}: {exc}", flush=True)
 
-            n_classes = len(classes)
-            Xtr_t = torch.tensor(X_train_p)
-            ytr_t = torch.tensor(y_train).float()
-            Xte_t = torch.tensor(X_test_p)
-            sweep_args = (adapter, decoders, Xtr_t, ytr_t, Xte_t, y_test, n_classes)
+    results = {}
+    for i, (task_id, rec) in enumerate(records.items()):
+        try:
+            sweep_args = (
+                adapter,
+                decoders,
+                rec["Xtr"],
+                rec["ytr"],
+                rec["Xte"],
+                rec["y_test"],
+                rec["n_classes"],
+            )
+            sweep_kw = {}
+            if args.ablation == "resample":
+                donor_tables = [
+                    (r["Xtr"], r["ytr"], r["Xte"]) for tid, r in records.items() if tid != task_id
+                ]
+                sweep_kw = dict(
+                    ablation="resample",
+                    donor_tables=donor_tables,
+                    n_donors=args.n_donors,
+                    seed=SEED,
+                )
 
-            sweep = ablation_sweep(*sweep_args)
-            native_final = native_final_auc(adapter, Xtr_t, ytr_t, Xte_t, y_test, n_classes)
+            sweep = ablation_sweep(*sweep_args, **sweep_kw)
+            native_final = native_final_auc(
+                adapter, rec["Xtr"], rec["ytr"], rec["Xte"], rec["y_test"], rec["n_classes"]
+            )
             entry = {
                 "sweep": sweep,
                 "native_final": native_final,
-                "n_train": int(len(X_train)),
-                "n_test": int(len(X_test)),
+                "n_train": rec["n_train"],
+                "n_test": rec["n_test"],
             }
-            if not args.skip_diffs:
+            # diffs is a zero-ablation scatter concept; only meaningful in zero mode.
+            if not args.skip_diffs and args.ablation == "zero":
                 entry["diffs"] = ablation_diffs(*sweep_args)
             results[str(task_id)] = entry
             final_auc = sweep["baseline"]["auc"][-1]
             print(
-                f"[{i + 1}/{n_tasks}] task {task_id}: final AUC {final_auc:.3f} | "
-                f"native {native_final:.3f} | rows {len(X_train)}+{len(X_test)}",
+                f"[{i + 1}/{len(records)}] task {task_id} ({args.ablation}): "
+                f"final AUC {final_auc:.3f} | native {native_final:.3f} | "
+                f"rows {rec['n_train']}+{rec['n_test']}",
                 flush=True,
             )
         except Exception as exc:  # keep going so one bad table can't sink the run
             print(
-                f"[{i + 1}/{n_tasks}] task {task_id}: FAILED {type(exc).__name__}: {exc}",
+                f"[{i + 1}/{len(records)}] task {task_id}: FAILED {type(exc).__name__}: {exc}",
                 flush=True,
             )
 

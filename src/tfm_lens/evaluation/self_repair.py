@@ -13,7 +13,9 @@ import torch
 from scipy.special import softmax
 
 from tfm_lens.adapters.base import ModelAdapter
-from tfm_lens.core.interventions import skip_layer
+from tfm_lens.core.capture import capture_layers
+from tfm_lens.core.donor import build_donor_delta, donor_deltas
+from tfm_lens.core.interventions import resample_layer, skip_layer
 from tfm_lens.evaluation.layerwise import (
     gt_logit_zscore_stats,
     layerwise_auc,
@@ -89,8 +91,12 @@ def ablation_sweep(
     X_test: torch.Tensor,
     y_test: np.ndarray,
     n_classes: int,
+    ablation: str = "zero",
+    donor_tables: list[tuple] | None = None,
+    n_donors: int = 8,
+    seed: int = 0,
 ) -> dict:
-    """Baseline + skip-each-layer per-depth metric trajectories for one table.
+    """Baseline + ablate-each-layer per-depth metric trajectories for one table.
 
     One forward per condition feeds every metric. Returns::
 
@@ -99,7 +105,16 @@ def ablation_sweep(
          "zscore": {"mu": float, "sigma": float}}
 
     ``metric`` in {auc, gt_logit, margin}; ``zscore`` = clean-baseline stats for
-    cross-task GT-logit normalization.
+    cross-task GT-logit normalization. (Key stays ``"skip"`` for both modes so the
+    plots read either unchanged.)
+
+    ``ablation`` (#35):
+
+    - ``"zero"`` — skip the layer (δ:=0). Off-distribution; kept as the cross-check.
+    - ``"resample"`` — δ:= a role-matched real-donor δ (on-manifold, norm-preserving).
+      Needs ``donor_tables`` (leave-one-out real tables, each ``(X_train, y_train,
+      X_test)``); draws ``n_donors`` without replacement, **averages the metric over
+      donors** (not the δ), and adds ``{metric}_p25/_p75`` per layer for the IQR band.
     """
 
     def _logits():
@@ -108,8 +123,95 @@ def ablation_sweep(
     base_logits = _logits()
     baseline = _all_metrics(base_logits, y_test)
     mu, sigma = gt_logit_zscore_stats(base_logits, y_test)
-    skip = {}
-    for m in range(adapter.n_layers):
-        with skip_layer(adapter, m):
-            skip[m] = _all_metrics(_logits(), y_test)
+
+    if ablation == "zero":
+        skip = {}
+        for m in range(adapter.n_layers):
+            with skip_layer(adapter, m):
+                skip[m] = _all_metrics(_logits(), y_test)
+    elif ablation == "resample":
+        if not donor_tables:
+            raise ValueError("resample ablation needs donor_tables (leave-one-out real tables)")
+        skip = _resample_skip(
+            adapter,
+            decoders,
+            X_train,
+            y_train,
+            X_test,
+            y_test,
+            n_classes,
+            donor_tables,
+            n_donors,
+            seed,
+        )
+    else:
+        raise ValueError(f"unknown ablation {ablation!r}; expected 'zero' or 'resample'")
+
     return {"baseline": baseline, "skip": skip, "zscore": {"mu": mu, "sigma": sigma}}
+
+
+def _clone_residual(r):
+    return tuple(t.clone() for t in r) if isinstance(r, tuple) else r.clone()
+
+
+def _target_residuals(adapter, decoders, X_train, y_train, X_test):
+    """Clean per-layer *input* residuals of the target forward — the shape + row-split
+    the donor draw fills against (values unused). One extra forward per task."""
+    device = next(decoders[0].parameters()).device
+    eval_pos = X_train.shape[0]
+    X = torch.cat([X_train, X_test], dim=0).unsqueeze(0).to(device)
+    y = y_train.unsqueeze(0).to(device)
+    with torch.no_grad(), capture_layers(adapter) as cache:
+        adapter.forward_frozen(X, y, eval_pos)
+        return [_clone_residual(adapter.residual_of(cache[m])) for m in range(adapter.n_layers)]
+
+
+def _average_over_donors(per_donor: list[dict], n_layers: int) -> dict:
+    """Per layer, mean each per-depth metric across donors (+ p25/p75 for the IQR band)."""
+    names = list(per_donor[0][0].keys())
+    out = {}
+    for m in range(n_layers):
+        entry = {}
+        for name in names:
+            stack = np.array([d[m][name] for d in per_donor])  # [n_donors, n_depths]
+            entry[name] = stack.mean(0).tolist()
+            entry[f"{name}_p25"] = np.percentile(stack, 25, axis=0).tolist()
+            entry[f"{name}_p75"] = np.percentile(stack, 75, axis=0).tolist()
+        out[m] = entry
+    return out
+
+
+def _resample_skip(
+    adapter, decoders, X_train, y_train, X_test, y_test, n_classes, donor_tables, n_donors, seed
+) -> dict:
+    """Resample-ablate each layer: for ``n_donors`` leave-one-out donor tables, swap
+    the layer's δ for a role-matched donor δ, then average the metric over donors."""
+
+    def _logits():
+        return predict_layers_logits(adapter, decoders, X_train, y_train, X_test, n_classes)
+
+    device = next(decoders[0].parameters()).device
+    eval_pos_t = X_train.shape[0]
+    target_res = _target_residuals(adapter, decoders, X_train, y_train, X_test)
+
+    k = min(n_donors, len(donor_tables))
+    picks = np.random.default_rng(seed).permutation(len(donor_tables))[:k]  # without replacement
+
+    per_donor = []
+    for di, i in enumerate(picks):
+        Xd_train, yd_train, Xd_test = donor_tables[i]
+        eval_pos_d = Xd_train.shape[0]
+        Xd = torch.cat([Xd_train, Xd_test], dim=0).unsqueeze(0).to(device)
+        yd = yd_train.unsqueeze(0).to(device)
+        d_deltas = donor_deltas(adapter, Xd, yd, eval_pos_d)
+        draw = np.random.default_rng(seed + 1 + di)  # per-donor position draw
+        by_layer = {}
+        for m in range(adapter.n_layers):
+            donor_delta = build_donor_delta(
+                target_res[m], d_deltas[m], eval_pos_t, eval_pos_d, adapter.label_token_index, draw
+            )
+            with resample_layer(adapter, m, donor_delta):
+                by_layer[m] = _all_metrics(_logits(), y_test)
+        per_donor.append(by_layer)
+
+    return _average_over_donors(per_donor, adapter.n_layers)
