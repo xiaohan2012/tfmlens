@@ -60,12 +60,20 @@ def test_gt_logit_means_true_class_per_depth():
 
 
 class TestLayerwiseMargin:
-    """Test layerwise_margin (binary z_true - z_other)."""
+    """Test layerwise_margin (binary z_true - z_other, median over rows)."""
 
-    def test_means_logit_difference_per_depth(self):
-        # margins: depth -> [3-1, 2-0] = [2, 2] (mean 2.0)
+    def test_median_logit_difference_per_depth(self):
+        # per-row margins: [3-1, 2-0] = [2, 2] -> median 2.0
         y_test = np.array([0, 1])
         depth = np.array([[3.0, 1.0], [0.0, 2.0]])
+        assert layerwise_margin([depth], y_test) == pytest.approx([2.0])
+
+    def test_median_is_outlier_robust(self):
+        # per-row margins [2, 2, 100]: median 2.0 (a mean would be ~34.7).
+        # guards the whole point of the metric: one off-distribution blown-up
+        # row must not hijack the per-depth score.
+        y_test = np.array([0, 1, 0])
+        depth = np.array([[3.0, 1.0], [0.0, 2.0], [102.0, 2.0]])
         assert layerwise_margin([depth], y_test) == pytest.approx([2.0])
 
     def test_raises_on_non_binary(self):

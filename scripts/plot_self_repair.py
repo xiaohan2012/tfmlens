@@ -31,6 +31,7 @@ _MODEL_LABELS = {
 _METRIC_YLABEL = {
     "auc": "Normalized performance (ROC-AUC)",
     "gt_logit": "GT-logit (z-scored, σ)",
+    "margin": "Median margin z_true - z_other (fraction of final)",
 }
 
 
@@ -48,12 +49,24 @@ def _normalize_task(sweep, native_final, metric):
 
     - auc: divide by native final AUC (floored 0.5).
     - gt_logit: per-task z-score with the stored clean-baseline (mu, sigma).
+    - margin: divide by the baseline final-layer margin (keeps 0 = decision
+      boundary; final -> 1, like auc's "fraction of final performance").
+
+    Margin divisor is one per-task scalar (mean row margin at the final layer),
+    so this is ratio-of-means, not mean-of-ratios: we do *not* divide each test
+    row by its own final margin. Per-row division explodes on boundary rows
+    (final margin ~ 0) and isn't the population quantity we want. With a per-task
+    scalar the order is moot anyway (dividing by a constant commutes with the
+    row-mean); we just normalize the already-averaged trajectory.
     """
+    margin_final = max(abs(sweep["baseline"]["margin"][-1]), 1e-6)
 
     def norm(arr):
         arr = np.array(arr)
         if metric == "auc":
             return arr / max(native_final, 0.5)
+        if metric == "margin":
+            return arr / margin_final
         z = sweep["zscore"]
         return (arr - z["mu"]) / z["sigma"]
 
@@ -116,6 +129,8 @@ def main():
 
     ax.set_xlabel("Layer (forward-pass order)")
     ax.set_ylabel(_METRIC_YLABEL[args.metric])
+    if args.metric == "auc":
+        ax.set_ylim(0.5, 1.0)  # fixed chance..perfect band; auto-zoom hides ceiling effects
     ax.set_title(
         f"{_MODEL_LABELS[args.model]} self-repair · {args.metric} "
         f"({len(results)} TabArena binary tasks)"

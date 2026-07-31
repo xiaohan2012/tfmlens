@@ -101,7 +101,12 @@ def layerwise_gt_logit(logits: list[np.ndarray], y_test: np.ndarray) -> list[flo
 
 
 def layerwise_margin(logits: list[np.ndarray], y_test: np.ndarray) -> list[float]:
-    """Per depth: mean over rows of ``z_true - z_other`` (log-odds). Binary only.
+    """Per depth: **median** over rows of ``z_true - z_other`` (log-odds). Binary only.
+
+    Median, not mean: skip ablation is off-distribution and blows up a few rows'
+    logits (LayerNorm rescale), so a mean gets hijacked by the tail while AUC
+    (rank-based) stays flat. The median is a robust location — median margin > 0
+    <=> most rows correct, tracking AUC instead of fighting it.
 
     Raises on multiclass: the 'max other' competitor drifts across runs -> not a fixed coordinate.
     """
@@ -110,7 +115,7 @@ def layerwise_margin(logits: list[np.ndarray], y_test: np.ndarray) -> list[float
     for z in logits:
         if z.shape[1] != 2:
             raise ValueError(f"layerwise_margin is binary-only; got {z.shape[1]} classes")
-        scores.append(float((_gt_logit(z, y_test) - _gt_logit(z, 1 - y_test)).mean()))
+        scores.append(float(np.median(_gt_logit(z, y_test) - _gt_logit(z, 1 - y_test))))
     return scores
 
 
