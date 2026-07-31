@@ -52,8 +52,14 @@ Notes:
 openml.org has had a global 504, and the server usually can't reach out anyway.
 openml can read **offline from cache**, but the path must be right:
 - Server default: `~/.cache/openml/org/openml/www` (note: **not** `~/.openml`)
-- From your local box, scp `~/.openml/org/openml/www/{tasks,datasets}` up to that
-  path.
+- From your local box, push `~/.openml/org/openml/www/{tasks,datasets}` up to that
+  path — but use the robust transfer below, **not** a plain scp/rsync.
+
+**Trap: "false success" on a flaky link.** A plain `rsync`/`scp` can exit **0**
+while the connection dropped mid-transfer (vast "session limit" kills long
+connections) — the exit code lies, the dir lands **empty or truncated**. Use
+`--partial` + keepalive + a retry loop, and only trust the transfer once the
+loop's own "done" marker prints (see §5 for the same pattern on the way back).
 
 ## 3. Run the finetune (train per-layer decoders)
 Inside tmux:
@@ -104,12 +110,27 @@ Exit-code triage:
   `--tasks <ids> --subsample-train 3000`, then merge the json.
 - Plot: `python scripts/plot_self_repair.py --model <model>`
 
-## 5. Copy results back to local
-- Weights in `weights/<model>/` (N decoder `.pth` files), result json in `out/`.
-- scp has a 300s timeout; large dirs often transfer half-way and can leave a
-  **truncated file** (exists but incomplete — it won't show up in the "missing"
-  list). Safe approach: `ls -l` a size manifest on both ends, `diff` them,
-  re-copy only the mismatches, then confirm every file's byte count matches.
+## 5. Copy files over a flaky / session-limited link (both directions)
+Same root cause as §2's "false success": the vast box drops long connections, so
+scp/rsync can die mid-transfer yet exit **0** or leave a truncated file. This
+bites both the openml upload (§2) and pulling `weights/<model>/` + `out/*.json`
+back.
+
+Robust pattern — `--partial` (keep half-sent files, resume) + `ServerAliveInterval`
+(keepalive, fewer drops) + `until … do sleep; done` (auto-retry until it *really*
+finishes; only then print the marker):
+
+```bash
+SSHOPT="ssh -q -i ~/.ssh/arena_key -p <port> -o ServerAliveInterval=15 -o ServerAliveCountMax=3"
+until rsync -a --partial -e "$SSHOPT" root@<host>:tfmlens/out/<file>.json out/; do
+  echo "[retry] $(date)"; sleep 10
+done
+echo "DONE"          # trust the transfer only after this prints
+```
+
+- Do the whole thing inside a detached background script for big dirs (weights
+  can be ~800MB) so a dropped **local** shell doesn't abort the retry loop.
+- Final verify (optional): `ls -l` a size manifest on both ends and `diff` them.
 
 ## 6. vast / ssh misc gotchas
 - `pkill -f <pattern>` also kills the ssh command itself (the pattern matches its
