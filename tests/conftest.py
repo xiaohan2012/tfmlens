@@ -101,6 +101,12 @@ class ToyAdapterDoubleStream(ModelAdapter):
     def identity_forward(self, *args, **kwargs):
         return args[0], args[1]
 
+    def residual_of(self, layer_output):
+        return layer_output[0], layer_output[1]  # both streams (support, query)
+
+    def resample_forward(self, donor_delta, *args, **kwargs):
+        return args[0] + donor_delta[0], args[1] + donor_delta[1]
+
 
 @pytest.fixture(scope="session")
 def limix_ckpt() -> str:

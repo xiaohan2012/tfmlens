@@ -14,6 +14,7 @@ from tfm_lens.vendor.limix import load_model
 
 class LimixAdapter(ModelAdapter):
     needs_transpose = True  # cls_y_decoder consumes (seq, batch, hidden)
+    label_token_index = -1  # label token is last on the token axis (see transformer.py)
 
     def __init__(self, model):
         self.model = model
@@ -53,3 +54,7 @@ class LimixAdapter(ModelAdapter):
 
     def identity_forward(self, *args, **kwargs):
         return args[0], None, None  # LimiX layers return (residual, feat_attn, sample_attn)
+
+    # residual_of: base default (out[0]) already picks the residual from the 3-tuple.
+    def resample_forward(self, donor_delta, *args, **kwargs):
+        return args[0] + donor_delta, None, None  # match the layer's 3-tuple return

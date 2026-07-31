@@ -18,6 +18,9 @@ class ModelAdapter(ABC):
 
     # Capability declaration — static, overridden by subclasses as needed.
     needs_transpose: bool = False  # whether the decoder wants (seq, batch, hidden)
+    # Token-axis index of the label token (the only position the decoder reads), for
+    # resample ablation's label←label bucketing. None = no token axis (3D residual).
+    label_token_index: int | None = None
 
     # ---- must be implemented ----
     @property
@@ -62,6 +65,34 @@ class ModelAdapter(ABC):
         - Mitra: ``return args[0], args[1]`` (support, query)
         """
         return args[0] if args else next(iter(kwargs.values()))
+
+    # ---- resample hooks (overridable; default suits single-stream layers) ----
+    def residual_of(self, layer_output):
+        """The residual stream(s) a layer carries forward, in *raw layer-output*
+        coordinates — stream picked, but **no token-slice and no norm** (unlike
+        ``readout``, which prepares the decoder input). This is the coordinate the
+        contribution ``δ = residual_of(out) − residual_of(in)`` is captured and a
+        donor ``δ`` is applied in.
+
+        Default: single stream — unwrap a tuple (LimiX's ``(res, …)``, or the
+        capture cache's input tuple ``(x,)``), else the tensor itself. Override for
+        double-stream models (Mitra returns both ``(support, query)``).
+        """
+        return layer_output[0] if isinstance(layer_output, tuple) else layer_output
+
+    def resample_forward(self, donor_delta, *args, **kwargs):
+        """What a resampled layer returns: the input residual **plus** ``donor_delta``,
+        in the layer's output shape. Mirrors ``identity_forward`` (same tuple layout)
+        but adds the donor contribution instead of passing the input through.
+
+        Default: single stream — ``input + donor_delta``. Override for tuple-returning
+        layers:
+
+        - LimiX: ``return args[0] + donor_delta, None, None``
+        - Mitra: ``return args[0] + donor_delta[0], args[1] + donor_delta[1]``
+        """
+        x = args[0] if args else next(iter(kwargs.values()))
+        return x + donor_delta
 
     @property
     def n_layers(self) -> int:
