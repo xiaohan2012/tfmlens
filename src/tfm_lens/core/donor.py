@@ -79,15 +79,19 @@ def _fill_block(t_block, d_block, label_index, rng) -> torch.Tensor:
     if label_index is None:
         return _fill_like(t_block, d_block.reshape(-1, hidden), rng)
 
-    tokens = t_block.shape[-2]
-    label = label_index % tokens
-    feats = [t for t in range(tokens) if t != label]
+    # Target and donor token counts differ across tables (different #features), so
+    # resolve the label position and feature indices *per block* — never index the
+    # donor with the target's token indices (that overruns when the donor is narrower).
+    t_label = label_index % t_block.shape[-2]
+    d_label = label_index % d_block.shape[-2]
+    t_feats = [t for t in range(t_block.shape[-2]) if t != t_label]
+    d_feats = [t for t in range(d_block.shape[-2]) if t != d_label]
     out = torch.empty_like(t_block)
-    out[..., label, :] = _fill_like(
-        t_block[..., label, :], d_block[..., label, :].reshape(-1, hidden), rng
+    out[..., t_label, :] = _fill_like(
+        t_block[..., t_label, :], d_block[..., d_label, :].reshape(-1, hidden), rng
     )
-    out[..., feats, :] = _fill_like(
-        t_block[..., feats, :], d_block[..., feats, :].reshape(-1, hidden), rng
+    out[..., t_feats, :] = _fill_like(
+        t_block[..., t_feats, :], d_block[..., d_feats, :].reshape(-1, hidden), rng
     )
     return out
 

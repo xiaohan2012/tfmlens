@@ -98,6 +98,32 @@ class TestBuildDonorDelta4D:
         assert torch.all(out[..., -1, :] == 99.0)  # label ← label (99)
         assert torch.all(out[..., :-1, :] == 0.0)  # features never see the 99 label tag
 
+    def test_differing_token_counts(self):
+        # regression (smoke): donor narrower than target on the token axis (fewer
+        # features). Resolve label/feature indices per block — never index the donor
+        # with the target's token indices.
+        target = torch.zeros(1, 4, 8, H)  # target: 7 feature tokens + 1 label (idx -1)
+        donor = torch.zeros(1, 3, 4, H)  # donor: only 3 feature tokens + 1 label
+        donor[..., -1, :] = 5.0  # label column
+        donor[..., :-1, :] = 1.0  # feature columns
+        out = build_donor_delta(
+            target, donor, eval_pos_t=2, eval_pos_d=1, label_index=-1, rng=_rng()
+        )
+        assert out.shape == (1, 4, 8, H)  # keeps the *target* token count
+        assert torch.all(out[..., -1, :] == 5.0)  # label ← donor label
+        assert torch.all(out[..., :-1, :] == 1.0)  # all 7 target feats ← donor's 3 feats
+
+    def test_donor_wider_than_target(self):
+        # the other direction: donor has more feature tokens than the target.
+        target = torch.zeros(1, 2, 3, H)  # 2 feature tokens + 1 label
+        donor = torch.full((1, 2, 9, H), 1.0)  # 8 feature tokens + 1 label
+        donor[..., -1, :] = 7.0
+        out = build_donor_delta(
+            target, donor, eval_pos_t=1, eval_pos_d=1, label_index=-1, rng=_rng()
+        )
+        assert out.shape == (1, 2, 3, H)
+        assert torch.all(out[..., -1, :] == 7.0) and torch.all(out[..., :-1, :] == 1.0)
+
 
 class TestBuildDonorDeltaDoubleStream:
     def test_3d_two_streams(self):
