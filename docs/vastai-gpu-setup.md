@@ -35,6 +35,7 @@ Correct path: use the image's preinstalled CUDA torch + plain pip (pip ignores
 
 ```bash
 git clone <repo> && cd tfmlens
+git checkout <branch>                       # a fresh clone is on main — see note below
 /venv/main/bin/pip install -e . tabicl     # core + tabicl group (synthetic prior)
 # verify torch is still the CUDA build:
 /venv/main/bin/python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
@@ -42,13 +43,18 @@ git clone <repo> && cd tfmlens
 ```
 
 Notes:
+- **Branch matters — a fresh clone defaults to `main`.** Features under active
+  development live on their branch, not `main`: e.g. the GT-logit sweep metric +
+  `plot_self_repair.py --metric gt_logit` are on `feat/logit-metric`. Running the
+  sweep from `main` silently gives you only the AUC trajectory. `git checkout` the
+  branch that has the code you actually want **before** installing / running.
 - Finetune only needs core + `tabicl` (synthetic prior); it does **not** need the
   `eval` group.
 - For a different backbone, swap `tabicl` for the matching dep group:
   - mitra: `einx safetensors huggingface-hub` (group `mitra`)
   - tabfm: `absl-py safetensors huggingface-hub` (group `tabfm`)
 
-## 2. OpenML offline cache (needed for the sweep, not for finetune)
+## 2b. OpenML offline cache (needed for the sweep, not for finetune)
 openml.org has had a global 504, and the server usually can't reach out anyway.
 openml can read **offline from cache**, but the path must be right:
 - Server default: `~/.cache/openml/org/openml/www` (note: **not** `~/.openml`)
@@ -62,7 +68,17 @@ connections) — the exit code lies, the dir lands **empty or truncated**. Use
 loop's own "done" marker prints (see §5 for the same pattern on the way back).
 
 ## 3. Run the finetune (train per-layer decoders)
-Inside tmux:
+
+**On a fresh / recreated box you usually don't need to re-finetune.** The sweep
+(§4) only needs the trained decoders in `weights/<model>/` (N `.pth` files). If
+you already have them locally (from a prior run), upload that dir with the robust
+transfer (§5) and **skip straight to §4** — finetuning is ~23min/model of wasted
+GPU. Re-finetune only when the decoders don't exist yet.
+
+Bootstrap order on a brand-new instance: §1 connect → §2 clone + right branch +
+deps → upload `weights/<model>/` **and** the openml cache (§2b) → §4 sweep.
+
+To actually train, inside tmux:
 
 ```bash
 tmux new -s ft
@@ -100,12 +116,23 @@ Exit-code triage:
 - OOM with a CUDA traceback = VRAM (lower `micro_batch_size` or `max_seq_len`)
 
 ## 4. Run the self-repair sweep (Figure 8 data)
+Inside tmux, and **`mkdir -p out` first** (see the redirect trap below):
 ```bash
-/venv/main/bin/python scripts/run_self_repair_sweep.py \
+mkdir -p out
+tmux new -d -s sweep "/venv/main/bin/python scripts/run_self_repair_sweep.py \
   --model <model> --subsample-train 1000 --subsample-test 500 \
-  --skip-diffs --device cuda
+  --skip-diffs --device cuda --out out/<model>.json > out/<model>.log 2>&1"
 ```
 
+- **`--subsample-train 1000 --subsample-test 500` is not arbitrary** — it matches
+  the paper's setup and the known-good reference runs. Going smaller (e.g.
+  300/100) is *not* just faster-and-noisier: fewer in-context rows make the model
+  weaker **and** make each ablation bite harder, so the self-repair curves shift.
+  Keep 1000/500 unless you have a reason not to.
+- **tmux redirect chicken-and-egg:** `tmux new -d '... > out/x.log'` dies
+  **silently** ("no server running") if `out/` doesn't exist yet — the shell
+  can't open the redirect target, so the session never starts. Always
+  `mkdir -p out` *before* launching tmux, not inside it.
 - High-feature tables may OOM on VRAM: rerun those alone with
   `--tasks <ids> --subsample-train 3000`, then merge the json.
 - Plot: `python scripts/plot_self_repair.py --model <model>`
