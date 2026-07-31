@@ -16,19 +16,22 @@ def toy_table():
     return X_train, y_train, X_test, y_test
 
 
-def test_ablation_sweep_returns_baseline_and_per_layer_trajectories(
-    toy_adapter, toy_decoders, toy_table
-):
+def test_ablation_sweep_returns_all_metrics_and_zscore(toy_adapter, toy_decoders, toy_table):
     X_train, y_train, X_test, y_test = toy_table
 
     res = ablation_sweep(toy_adapter, toy_decoders, X_train, y_train, X_test, y_test, n_classes=2)
 
     n_depths = toy_adapter.n_layers + 1
-    assert len(res["baseline"]) == n_depths  # one AUC per capture depth
+    metrics = {"auc", "gt_logit", "margin"}
+    assert set(res["baseline"]) == metrics  # one trajectory per metric, off one forward
+    assert all(len(res["baseline"][name]) == n_depths for name in metrics)
     assert set(res["skip"]) == set(range(toy_adapter.n_layers))  # skip each layer once
     for traj in res["skip"].values():
-        assert len(traj) == n_depths
-    assert all(0.0 <= a <= 1.0 for a in res["baseline"])
+        assert set(traj) == metrics
+        assert all(len(traj[name]) == n_depths for name in metrics)
+    assert all(0.0 <= a <= 1.0 for a in res["baseline"]["auc"])
+    assert set(res["zscore"]) == {"mu", "sigma"}  # clean-baseline normalization stats
+    assert res["zscore"]["sigma"] > 0
 
 
 def test_native_final_auc_is_a_score(toy_adapter, toy_table):
