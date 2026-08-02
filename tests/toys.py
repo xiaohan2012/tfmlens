@@ -119,5 +119,5 @@ class ToyAdapter4D(ModelAdapter):
         return args[0], None, None  # match the layer's 3-tuple return
 
     # residual_of: base default (out[0]) already picks the residual from the 3-tuple.
-    def resample_forward(self, donor_delta, *args, **kwargs):
+    def inject_delta_forward(self, donor_delta, *args, **kwargs):
         return args[0] + donor_delta, None, None  # match the layer's 3-tuple return

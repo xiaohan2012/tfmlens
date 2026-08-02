@@ -104,7 +104,7 @@ class ToyAdapterDoubleStream(ModelAdapter):
     def residual_of(self, layer_output):
         return layer_output[0], layer_output[1]  # both streams (support, query)
 
-    def resample_forward(self, donor_delta, *args, **kwargs):
+    def inject_delta_forward(self, donor_delta, *args, **kwargs):
         return args[0] + donor_delta[0], args[1] + donor_delta[1]
 
 

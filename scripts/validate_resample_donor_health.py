@@ -1,4 +1,4 @@
-"""V1 donor-δ health check for resample ablation (#35).
+"""Donor-δ health check for resample ablation (#35).
 
 Question: is resample **on-manifold + norm-preserving**? Zero ablation is the
 "broken" reference. All three checks are read off the *decoded position* (label
@@ -14,7 +14,7 @@ Cheap: the post-ablation residual *at* layer m needs only layer m's clean input 
 the intervention (upstream is frozen), so one clean target forward + one forward
 per donor suffices — no per-layer re-forward, no decoders.
 
-    uv run --group eval --group viz python scripts/validate_resample_v1.py \
+    uv run --group eval --group viz python scripts/validate_resample_donor_health.py \
         --models limix_2m mitra tabicl_v2 --tasks 363621,363671,363696
 """
 
@@ -27,7 +27,7 @@ import numpy as np
 import torch
 
 from tfm_lens.core.capture import capture_layers
-from tfm_lens.core.donor import build_donor_delta, donor_deltas
+from tfm_lens.core.resample_ablation import build_donor_delta, donor_deltas
 from tfm_lens.evaluation.datasets import TABARENA_BINARY_TASK_IDS, load_tabarena_task
 from tfm_lens.evaluation.preprocess import (
     limix_preprocess,

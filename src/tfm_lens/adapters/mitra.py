@@ -76,6 +76,6 @@ class MitraAdapter(ModelAdapter):
         # cache's input tuple).
         return layer_output[0], layer_output[1]
 
-    def resample_forward(self, donor_delta, *args, **kwargs):
+    def inject_delta_forward(self, donor_delta, *args, **kwargs):
         # donor_delta is a (support_δ, query_δ) pair, one per stream.
         return args[0] + donor_delta[0], args[1] + donor_delta[1]

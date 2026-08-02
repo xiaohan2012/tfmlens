@@ -59,11 +59,11 @@ class TestModelAdapter:
 
 
 class TestResampleHooks:
-    """residual_of / resample_forward — the coordinate resample ablation (#35)
+    """residual_of / inject_delta_forward — the coordinate resample ablation (#35)
     captures a contribution δ in and applies a donor δ in.
 
     Key invariant: ``δ = residual_of(out) − residual_of(in)`` and
-    ``resample_forward(δ, in) == out`` — re-applying a layer's *own* δ reproduces
+    ``inject_delta_forward(δ, in) == out`` — re-applying a layer's *own* δ reproduces
     its output, so a *donor* δ is a clean drop-in (only the contribution swaps).
     """
 
@@ -88,18 +88,18 @@ class TestResampleHooks:
         torch.testing.assert_close(rs, s)
         torch.testing.assert_close(rq, q)
 
-    # ---- resample_forward: input + donor δ, in the layer's own output shape ----
+    # ---- inject_delta_forward: input + donor δ, in the layer's own output shape ----
     def test_resample_roundtrip_single_stream(self, toy_adapter):
         x = torch.randn(2, 5, ToyAdapter3D.HIDDEN)
         out = toy_adapter.layers[1](x)
         delta = toy_adapter.residual_of(out) - toy_adapter.residual_of((x,))
-        torch.testing.assert_close(toy_adapter.resample_forward(delta, x), out)
+        torch.testing.assert_close(toy_adapter.inject_delta_forward(delta, x), out)
 
     def test_resample_roundtrip_4d_keeps_tuple_shape(self, toy_adapter_4d):
         x = torch.randn(2, 5, ToyAdapter4D.TOKENS, ToyAdapter4D.HIDDEN)
         out = toy_adapter_4d.layers[1](x)  # (residual, None, None)
         delta = toy_adapter_4d.residual_of(out) - toy_adapter_4d.residual_of((x,))
-        res = toy_adapter_4d.resample_forward(delta, x)
+        res = toy_adapter_4d.inject_delta_forward(delta, x)
         assert isinstance(res, tuple) and len(res) == 3 and res[1] is None and res[2] is None
         torch.testing.assert_close(res[0], out[0])
 
@@ -110,7 +110,7 @@ class TestResampleHooks:
         out = a.layers[1](s, q)  # (lin(s), lin(q))
         r_out, r_in = a.residual_of(out), a.residual_of((s, q))
         delta = (r_out[0] - r_in[0], r_out[1] - r_in[1])
-        res = a.resample_forward(delta, s, q)
+        res = a.inject_delta_forward(delta, s, q)
         torch.testing.assert_close(res[0], out[0])
         torch.testing.assert_close(res[1], out[1])
 
@@ -118,4 +118,4 @@ class TestResampleHooks:
         # a *foreign* δ swaps the contribution: output = input + donor δ, exactly.
         x = torch.randn(2, 5, ToyAdapter3D.HIDDEN)
         donor = torch.randn(2, 5, ToyAdapter3D.HIDDEN)
-        torch.testing.assert_close(toy_adapter.resample_forward(donor, x), x + donor)
+        torch.testing.assert_close(toy_adapter.inject_delta_forward(donor, x), x + donor)

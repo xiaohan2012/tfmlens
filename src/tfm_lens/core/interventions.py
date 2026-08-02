@@ -25,18 +25,21 @@ def skip_layer(adapter, idx):
 
 
 @contextmanager
-def resample_layer(adapter, idx, donor_delta):
+def inject_delta(adapter, idx, donor_delta):
     """Replace layer ``idx``'s contribution with ``donor_delta`` for the context:
-    the layer returns ``input_residual + donor_delta`` instead of its own output
-    (resample ablation, #35). Upstream is untouched; downstream reacts freely.
+    the layer returns ``input_residual + donor_delta`` instead of its own output.
+    Policy-agnostic: resample ablation (#35) supplies a real donor δ; ``skip_layer``
+    is the special case δ:=0. Upstream is untouched; downstream reacts freely.
 
     ``donor_delta`` must match the layer's input-residual shape (a Tensor, or a
     per-stream tuple for double-stream models) — build it with
-    ``core.donor.build_donor_delta``. ``skip_layer`` is the special case δ:=0.
+    ``core.resample_ablation.build_donor_delta``. ``skip_layer`` is the special case δ:=0.
     """
     layer = adapter.layers[idx]
     original = layer.forward
-    layer.forward = lambda *args, **kwargs: adapter.resample_forward(donor_delta, *args, **kwargs)
+    layer.forward = lambda *args, **kwargs: adapter.inject_delta_forward(
+        donor_delta, *args, **kwargs
+    )
     try:
         yield
     finally:

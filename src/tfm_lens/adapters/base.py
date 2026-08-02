@@ -66,7 +66,7 @@ class ModelAdapter(ABC):
         """
         return args[0] if args else next(iter(kwargs.values()))
 
-    # ---- resample hooks (overridable; default suits single-stream layers) ----
+    # ---- δ-injection hooks (overridable; default suits single-stream layers) ----
     def residual_of(self, layer_output):
         """The residual stream(s) a layer carries forward, in *raw layer-output*
         coordinates — stream picked, but **no token-slice and no norm** (unlike
@@ -80,8 +80,8 @@ class ModelAdapter(ABC):
         """
         return layer_output[0] if isinstance(layer_output, tuple) else layer_output
 
-    def resample_forward(self, donor_delta, *args, **kwargs):
-        """What a resampled layer returns: the input residual **plus** ``donor_delta``,
+    def inject_delta_forward(self, donor_delta, *args, **kwargs):
+        """What a δ-injected layer returns: the input residual **plus** ``donor_delta``,
         in the layer's output shape. Mirrors ``identity_forward`` (same tuple layout)
         but adds the donor contribution instead of passing the input through.
 

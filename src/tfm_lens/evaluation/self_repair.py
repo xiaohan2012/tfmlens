@@ -14,8 +14,8 @@ from scipy.special import softmax
 
 from tfm_lens.adapters.base import ModelAdapter
 from tfm_lens.core.capture import capture_layers
-from tfm_lens.core.donor import build_donor_delta, donor_deltas
-from tfm_lens.core.interventions import resample_layer, skip_layer
+from tfm_lens.core.interventions import inject_delta, skip_layer
+from tfm_lens.core.resample_ablation import build_donor_delta, donor_deltas
 from tfm_lens.evaluation.layerwise import (
     gt_logit_zscore_stats,
     layerwise_auc,
@@ -210,7 +210,7 @@ def _resample_skip(
             donor_delta = build_donor_delta(
                 target_res[m], d_deltas[m], eval_pos_t, eval_pos_d, adapter.label_token_index, draw
             )
-            with resample_layer(adapter, m, donor_delta):
+            with inject_delta(adapter, m, donor_delta):
                 by_layer[m] = _all_metrics(_logits(), y_test)
         per_donor.append(by_layer)
 
