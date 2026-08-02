@@ -129,7 +129,7 @@ def gt_logit_zscore_stats(
     - raises if sigma == 0 (degenerate task).
     """
     y_test = np.asarray(y_test)
-    gt = _gt_logit(clean_logits[-1], y_test)
+    gt = _gt_logit(clean_logits[-1], y_test)  # [-1] = final layer (the task's output scale)
     mu, sigma = float(gt.mean()), float(gt.std())
     if sigma == 0.0:
         raise ValueError("degenerate task: final-layer GT-logit has zero spread across rows")

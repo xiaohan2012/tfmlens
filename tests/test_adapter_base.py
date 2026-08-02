@@ -9,7 +9,7 @@ import pytest
 import torch
 
 from tfm_lens.adapters.base import ModelAdapter
-from toys import ToyAdapter3D
+from toys import ToyAdapter3D, ToyAdapter4D
 
 
 class TestModelAdapter:
@@ -56,3 +56,66 @@ class TestModelAdapter:
 
         with pytest.raises(TypeError):
             Incomplete()
+
+
+class TestResampleHooks:
+    """residual_of / inject_delta_forward — the coordinate resample ablation (#35)
+    captures a contribution δ in and applies a donor δ in.
+
+    Key invariant: ``δ = residual_of(out) − residual_of(in)`` and
+    ``inject_delta_forward(δ, in) == out`` — re-applying a layer's *own* δ reproduces
+    its output, so a *donor* δ is a clean drop-in (only the contribution swaps).
+    """
+
+    # ---- residual_of: pick the stream, keep every row/token (no slice, no norm) ----
+    def test_residual_of_single_stream(self, toy_adapter):
+        x = torch.randn(2, 5, ToyAdapter3D.HIDDEN)
+        # bare tensor (a layer output) -> itself; capture's input tuple (x,) -> x.
+        torch.testing.assert_close(toy_adapter.residual_of(x), x)
+        torch.testing.assert_close(toy_adapter.residual_of((x,)), x)
+
+    def test_residual_of_4d_keeps_token_axis(self, toy_adapter_4d):
+        # bucketing must be able to index the label token, so the token axis stays.
+        res = torch.randn(2, 5, ToyAdapter4D.TOKENS, ToyAdapter4D.HIDDEN)
+        r = toy_adapter_4d.residual_of((res, None, None))  # LimiX-style 3-tuple
+        torch.testing.assert_close(r, res)
+        assert r.shape == (2, 5, ToyAdapter4D.TOKENS, ToyAdapter4D.HIDDEN)
+
+    def test_residual_of_double_stream_returns_both(self, toy_adapter_double_stream):
+        s = torch.randn(2, 3, ToyAdapter3D.HIDDEN)
+        q = torch.randn(2, 2, ToyAdapter3D.HIDDEN)
+        rs, rq = toy_adapter_double_stream.residual_of((s, q))
+        torch.testing.assert_close(rs, s)
+        torch.testing.assert_close(rq, q)
+
+    # ---- inject_delta_forward: input + donor δ, in the layer's own output shape ----
+    def test_resample_roundtrip_single_stream(self, toy_adapter):
+        x = torch.randn(2, 5, ToyAdapter3D.HIDDEN)
+        out = toy_adapter.layers[1](x)
+        delta = toy_adapter.residual_of(out) - toy_adapter.residual_of((x,))
+        torch.testing.assert_close(toy_adapter.inject_delta_forward(delta, x), out)
+
+    def test_resample_roundtrip_4d_keeps_tuple_shape(self, toy_adapter_4d):
+        x = torch.randn(2, 5, ToyAdapter4D.TOKENS, ToyAdapter4D.HIDDEN)
+        out = toy_adapter_4d.layers[1](x)  # (residual, None, None)
+        delta = toy_adapter_4d.residual_of(out) - toy_adapter_4d.residual_of((x,))
+        res = toy_adapter_4d.inject_delta_forward(delta, x)
+        assert isinstance(res, tuple) and len(res) == 3 and res[1] is None and res[2] is None
+        torch.testing.assert_close(res[0], out[0])
+
+    def test_resample_roundtrip_double_stream(self, toy_adapter_double_stream):
+        a = toy_adapter_double_stream
+        s = torch.randn(2, 3, ToyAdapter3D.HIDDEN)
+        q = torch.randn(2, 2, ToyAdapter3D.HIDDEN)
+        out = a.layers[1](s, q)  # (lin(s), lin(q))
+        r_out, r_in = a.residual_of(out), a.residual_of((s, q))
+        delta = (r_out[0] - r_in[0], r_out[1] - r_in[1])
+        res = a.inject_delta_forward(delta, s, q)
+        torch.testing.assert_close(res[0], out[0])
+        torch.testing.assert_close(res[1], out[1])
+
+    def test_resample_applies_donor_delta(self, toy_adapter):
+        # a *foreign* δ swaps the contribution: output = input + donor δ, exactly.
+        x = torch.randn(2, 5, ToyAdapter3D.HIDDEN)
+        donor = torch.randn(2, 5, ToyAdapter3D.HIDDEN)
+        torch.testing.assert_close(toy_adapter.inject_delta_forward(donor, x), x + donor)

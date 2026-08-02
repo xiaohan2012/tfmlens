@@ -19,6 +19,8 @@ _HF_REPO = "autogluon/mitra-classifier"
 
 
 class MitraAdapter(ModelAdapter):
+    label_token_index = 0  # label token is first on the token axis (einops.pack((y, x)))
+
     def __init__(self, model):
         self.model = model
         # Force the standard-attention path (see module doc): the flash path has a
@@ -67,3 +69,13 @@ class MitraAdapter(ModelAdapter):
     def identity_forward(self, *args, **kwargs):
         # A skipped layer returns its two streams unchanged: (support, query).
         return args[0], args[1]
+
+    def residual_of(self, layer_output):
+        # Double-stream: both (support, query) carry forward -> δ is captured/applied
+        # on both. layer_output is the 2-tuple (from a layer output or the capture
+        # cache's input tuple).
+        return layer_output[0], layer_output[1]
+
+    def inject_delta_forward(self, donor_delta, *args, **kwargs):
+        # donor_delta is a (support_δ, query_δ) pair, one per stream.
+        return args[0] + donor_delta[0], args[1] + donor_delta[1]

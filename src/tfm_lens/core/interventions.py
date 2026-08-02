@@ -24,5 +24,27 @@ def skip_layer(adapter, idx):
         layer.forward = original
 
 
+@contextmanager
+def inject_delta(adapter, idx, donor_delta):
+    """Replace layer ``idx``'s contribution with ``donor_delta`` for the context:
+    the layer returns ``input_residual + donor_delta`` instead of its own output.
+    Policy-agnostic: resample ablation (#35) supplies a real donor δ; ``skip_layer``
+    is the special case δ:=0. Upstream is untouched; downstream reacts freely.
+
+    ``donor_delta`` must match the layer's input-residual shape (a Tensor, or a
+    per-stream tuple for double-stream models) — build it with
+    ``core.resample_ablation.build_donor_delta``. ``skip_layer`` is the special case δ:=0.
+    """
+    layer = adapter.layers[idx]
+    original = layer.forward
+    layer.forward = lambda *args, **kwargs: adapter.inject_delta_forward(
+        donor_delta, *args, **kwargs
+    )
+    try:
+        yield
+    finally:
+        layer.forward = original
+
+
 # TODO(exp5): loop_layer(adapter, idx, n) — call a layer's forward n times in a
 # row, for the looping / repeated-layer experiment.

@@ -85,6 +85,7 @@ class ToyAdapter4D(ModelAdapter):
     layers return a 3-tuple. Exercises the 4D decode path with no checkpoint."""
 
     needs_transpose = False
+    label_token_index = -1  # label token last on the token axis (LimiX convention)
 
     HIDDEN = 8
     N_CLASSES = 4
@@ -116,3 +117,7 @@ class ToyAdapter4D(ModelAdapter):
 
     def identity_forward(self, *args, **kwargs):
         return args[0], None, None  # match the layer's 3-tuple return
+
+    # residual_of: base default (out[0]) already picks the residual from the 3-tuple.
+    def inject_delta_forward(self, donor_delta, *args, **kwargs):
+        return args[0] + donor_delta, None, None  # match the layer's 3-tuple return
