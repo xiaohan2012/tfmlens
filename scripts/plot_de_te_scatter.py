@@ -1,6 +1,6 @@
 """D1 — the DE–TE scatter (Hydra Fig 2c analog), from ``run_direct_effect_sweep.py``.
 
-Each point = one (layer, dataset). Axes (both through the native head, same ruler):
+Each point = one (layer, dataset). Axes (both through the native decoder, same ruler):
 
 - x = DE (direct effect, path-patching 取法 B)
 - y = TE (total effect, ablate-and-react)

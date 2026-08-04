@@ -1,12 +1,12 @@
 """Path-patching DE / TE (取法 B) — ``evaluation.direct_effect``.
 
-Headline invariant: DE's residual **arithmetic** (``r_L − a_m + ã_m``, no
-per-layer forward) reproduces a real **frozen-downstream forward** (skip m, pin
-every downstream layer to its clean contribution). If those match, the O(1)-forward
-shortcut is exact — for any head, any stream layout.
+Headline invariant: the DE **arithmetic** ``patched_residual`` (``r_L − a_m + ã_m``,
+no per-layer forward) reproduces a real **frozen-downstream forward** (ablate m to
+ã_m, pin every downstream layer to its clean contribution). Holds for *any* ã_m, any
+head, any stream layout ⇒ the O(1)-forward shortcut is exact.
 
-Also: on a linear head DE collapses to the logit-lens closed form (取法 A == B);
-and the resample path runs with the right shape/keys.
+Also: on a linear head DE collapses to the logit-lens closed form (取法 A == B); and
+the resample sweep runs with the right shape/keys.
 """
 
 from contextlib import ExitStack
@@ -17,17 +17,21 @@ import torch
 import torch.nn as nn
 
 from tfm_lens.core.capture import capture_layers
-from tfm_lens.core.interventions import inject_delta, skip_layer
+from tfm_lens.core.interventions import inject_delta
 from tfm_lens.core.resample_ablation import layer_deltas
-from tfm_lens.evaluation.direct_effect import direct_total_effect, native_head_logits
-from tfm_lens.evaluation.layerwise import layerwise_gt_logit
+from tfm_lens.evaluation.direct_effect import (
+    direct_total_effect,
+    final_decoder_logits,
+    patched_residual,
+)
+from tfm_lens.utils import clone_residual
 from toys import ToyAdapter3D, ToyAdapter4D
 
 
-# --- binary, stable-decoder toys (margin is binary-only; head must be one fixed instance) ---
+# --- binary, stable-decoder toys (margin is binary-only; decoder must be one fixed instance) ---
 def _binary(cls):
-    """Subclass a toy so its head is binary and the *same* instance every call
-    (real adapters return their shared head; the base toy makes a fresh Linear)."""
+    """Subclass a toy so its decoder is binary and the *same* instance every call
+    (real adapters return their shared decoder; the base toy makes a fresh Linear)."""
 
     class _Bin(cls):
         N_CLASSES = 2
@@ -69,7 +73,7 @@ class _DoubleBackbone(nn.Module):
 
 class BinaryDoubleStreamToy(ToyAdapter3D):
     """Binary double-stream toy (Mitra family): layers take/return (support, query),
-    readout takes the query stream — exercises the tuple ``_swap`` path."""
+    readout takes the query stream — exercises the tuple ``patched_residual`` path."""
 
     N_CLASSES = 2
 
@@ -114,86 +118,85 @@ def _inputs(row_shape, n_train=4, n_test=3, seed=0):
     return Xtr, ytr, Xte, y_test
 
 
-def _clone(r):
-    return tuple(t.clone() for t in r) if isinstance(r, tuple) else r.clone()
+def _rand_like(r, gen):
+    """An arbitrary replacement ã_m shaped like a residual (Tensor or stream tuple)."""
+    if isinstance(r, tuple):
+        return tuple(torch.randn(t.shape, generator=gen) for t in r)
+    return torch.randn(r.shape, generator=gen)
 
 
-def _frozen_forward_de_logits(adapter, Xtr, ytr, Xte, n_classes, m):
-    """DE the *slow* way: ablate m (zero), pin every downstream layer to its clean
-    contribution via ``inject_delta``, run a real forward, read the native head."""
-    decoder = adapter.decoder_template()
+def _clean_forward(adapter, Xtr, ytr, Xte):
+    """Clean per-layer contributions a_m + final residual r_L, off one forward."""
     eval_pos = Xtr.shape[0]
     X = torch.cat([Xtr, Xte], dim=0).unsqueeze(0)
-    y = ytr.unsqueeze(0)
     with torch.no_grad(), capture_layers(adapter) as cache:
-        adapter.forward_frozen(X, y, eval_pos)
-        contribs = [_clone(d) for d in layer_deltas(adapter, cache)]
+        adapter.forward_frozen(X, ytr.unsqueeze(0), eval_pos)
+        contribs = [clone_residual(d) for d in layer_deltas(adapter, cache)]
+        r_full = clone_residual(adapter.residual_of(cache[-1]))
+    return X, ytr.unsqueeze(0), eval_pos, contribs, r_full
+
+
+def _frozen_forward_logits(adapter, X, y, eval_pos, decoder, m, replacement, contribs, n_classes):
+    """DE the *slow* way: ablate m to ``replacement``, pin every downstream layer to
+    its clean contribution, run a real forward, read the native decoder."""
     with ExitStack() as stack:
-        stack.enter_context(skip_layer(adapter, m))  # ã_m := 0
+        stack.enter_context(inject_delta(adapter, m, replacement))
         for layer in range(m + 1, adapter.n_layers):
-            stack.enter_context(inject_delta(adapter, layer, contribs[layer]))  # pin to clean
-        with torch.no_grad(), capture_layers(adapter) as cache2:
+            stack.enter_context(inject_delta(adapter, layer, contribs[layer]))
+        with torch.no_grad(), capture_layers(adapter) as cache:
             adapter.forward_frozen(X, y, eval_pos)
-            r = adapter.residual_of(cache2[-1])
-            return native_head_logits(adapter, r, decoder, eval_pos, n_classes)
+            r = adapter.residual_of(cache[-1])
+            return final_decoder_logits(adapter, r, decoder, eval_pos, n_classes)
 
 
 @pytest.mark.parametrize("make_adapter, row_shape", _CASES)
-def test_de_arithmetic_equals_frozen_forward(make_adapter, row_shape):
-    """The O(1)-forward arithmetic DE == the brute-force frozen-downstream forward."""
+def test_patched_residual_equals_frozen_forward(make_adapter, row_shape):
+    """The O(1)-forward arithmetic == the brute-force frozen-downstream forward, for
+    an arbitrary replacement ã_m."""
     adapter = make_adapter()
-    Xtr, ytr, Xte, y_test = _inputs(row_shape)
-    res = direct_total_effect(adapter, Xtr, ytr, Xte, y_test, 2, ablation="zero")
-    clean_gt = res["clean"]["gt_logit"]
+    Xtr, ytr, Xte, _ = _inputs(row_shape)
+    decoder = adapter.decoder_template()
+    X, y, eval_pos, contribs, r_full = _clean_forward(adapter, Xtr, ytr, Xte)
+    gen = torch.Generator().manual_seed(1)
     for m in range(adapter.n_layers):
-        frozen = _frozen_forward_de_logits(adapter, Xtr, ytr, Xte, 2, m)
-        frozen_gt = layerwise_gt_logit([frozen], y_test)[0]
-        # DE(m) = clean − ablated; both go through the same head, so this is exact.
-        assert res["de"][m]["gt_logit"] == pytest.approx(clean_gt - frozen_gt, abs=1e-5)
+        replacement = _rand_like(contribs[m], gen)
+        arith = final_decoder_logits(
+            adapter, patched_residual(r_full, contribs[m], replacement), decoder, eval_pos, 2
+        )
+        frozen = _frozen_forward_logits(
+            adapter, X, y, eval_pos, decoder, m, replacement, contribs, 2
+        )
+        np.testing.assert_allclose(arith, frozen, atol=1e-5)
 
 
 def test_de_matches_logit_lens_on_linear_head():
-    """Linear head ⇒ DE(m) = decode(a_m) − decode(0) (bias cancels) = 取法 A."""
+    """Linear head ⇒ clean − patched = decode(a_m − ã_m) − decode(0) (bias cancels) = 取法 A."""
     adapter = BinaryToy3D()
-    Xtr, ytr, Xte, y_test = _inputs((ToyAdapter3D.HIDDEN,))
+    Xtr, ytr, Xte, _ = _inputs((ToyAdapter3D.HIDDEN,))
     decoder = adapter.decoder_template()
-    eval_pos = Xtr.shape[0]
-    X = torch.cat([Xtr, Xte], dim=0).unsqueeze(0)
-
-    with torch.no_grad(), capture_layers(adapter) as cache:
-        adapter.forward_frozen(X, ytr.unsqueeze(0), eval_pos)
-        contribs = [_clone(d) for d in layer_deltas(adapter, cache)]
-
-    res = direct_total_effect(adapter, Xtr, ytr, Xte, y_test, 2, ablation="zero")
-    zero_logits = native_head_logits(adapter, torch.zeros_like(contribs[0]), decoder, eval_pos, 2)
-    zero_gt = layerwise_gt_logit([zero_logits], y_test)[0]
+    _, _, eval_pos, contribs, r_full = _clean_forward(adapter, Xtr, ytr, Xte)
+    clean_logits = final_decoder_logits(adapter, r_full, decoder, eval_pos, 2)
+    zero_logits = final_decoder_logits(adapter, torch.zeros_like(contribs[0]), decoder, eval_pos, 2)
+    gen = torch.Generator().manual_seed(2)
     for m in range(adapter.n_layers):
-        lens_logits = native_head_logits(adapter, contribs[m], decoder, eval_pos, 2)
-        lens_de = layerwise_gt_logit([lens_logits], y_test)[0] - zero_gt
-        assert res["de"][m]["gt_logit"] == pytest.approx(lens_de, abs=1e-5)
+        replacement = _rand_like(contribs[m], gen)
+        patched = final_decoder_logits(
+            adapter, patched_residual(r_full, contribs[m], replacement), decoder, eval_pos, 2
+        )
+        lens = final_decoder_logits(adapter, contribs[m] - replacement, decoder, eval_pos, 2)
+        np.testing.assert_allclose(clean_logits - patched, lens - zero_logits, atol=1e-5)
 
 
 def test_resample_runs_with_shape_and_keys():
-    """Resample path: donor tables (other toy tables) → de/te for every layer,
-    both coordinates, all finite."""
+    """Resample sweep: donor tables (other toy tables) → de/te for every layer, both
+    coordinates, all finite."""
     adapter = BinaryToy3D()
     Xtr, ytr, Xte, y_test = _inputs((ToyAdapter3D.HIDDEN,), seed=1)
     donor_tables = [
         (dtr, dytr, dte)
         for dtr, dytr, dte, _ in (_inputs((ToyAdapter3D.HIDDEN,), seed=s) for s in (2, 3, 4))
     ]
-    res = direct_total_effect(
-        adapter,
-        Xtr,
-        ytr,
-        Xte,
-        y_test,
-        2,
-        ablation="resample",
-        donor_tables=donor_tables,
-        n_donors=3,
-        seed=0,
-    )
+    res = direct_total_effect(adapter, Xtr, ytr, Xte, y_test, 2, donor_tables, n_donors=3, seed=0)
     for effect in ("de", "te"):
         assert set(res[effect]) == set(range(adapter.n_layers))
         for m in range(adapter.n_layers):
@@ -205,4 +208,4 @@ def test_resample_needs_donor_tables():
     adapter = BinaryToy3D()
     Xtr, ytr, Xte, y_test = _inputs((ToyAdapter3D.HIDDEN,))
     with pytest.raises(ValueError, match="donor_tables"):
-        direct_total_effect(adapter, Xtr, ytr, Xte, y_test, 2, ablation="resample")
+        direct_total_effect(adapter, Xtr, ytr, Xte, y_test, 2, donor_tables=[])

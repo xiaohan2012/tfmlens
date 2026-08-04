@@ -1,14 +1,14 @@
 """Path-patching DE–TE sweep over the TabArena binary tasks (issue #44, Part 1).
 
 For each dataset: load -> (optional) subsample -> preprocess -> ``direct_total_effect``
-(per-layer DE and TE on the **native head**, same ruler) + ``native_final_auc``
+(per-layer DE and TE on the **native decoder**, same ruler) + ``native_final_auc``
 (the per-dataset normalizer). Dumped to JSON for ``plot_de_te_scatter.py`` (the
 Hydra Fig-2c analog).
 
 DE = path-patching direct effect (取法 B, one clean forward + residual arithmetic);
-TE = total effect (ablate-and-react). Default ablation is **resample** (on-manifold);
-donors are the other loaded tasks (leave-one-out). Unlike the tuned-decoder sweep,
-this reads only the model's own head — no ``weights/`` decoders needed.
+TE = total effect (ablate-and-react). Ablation is **resample** (on-manifold); donors
+are the other loaded tasks (leave-one-out). Unlike the tuned-decoder sweep, this reads
+only the model's own decoder — no ``weights/`` decoders needed.
 
     uv run --group eval python scripts/run_direct_effect_sweep.py --model limix_2m
     uv run --group eval python scripts/run_direct_effect_sweep.py --model mitra \
@@ -50,9 +50,6 @@ def _parse_args():
     p.add_argument("--out", type=Path, default=Path("out/direct_effect.json"))
     p.add_argument("--device", default="cpu", help="cpu or cuda (Mitra's full tables need cuda)")
     p.add_argument("--tasks", default=None, help="comma-separated task ids; default all 15")
-    p.add_argument(
-        "--ablation", choices=["zero", "resample"], default="resample", help="ablation mode"
-    )
     p.add_argument(
         "--n-donors", type=int, default=8, help="resample: donors drawn per target (LOO)"
     )
@@ -104,20 +101,19 @@ def main():
     results = {}
     for i, (task_id, rec) in enumerate(records.items()):
         try:
-            kw = {}
-            if args.ablation == "resample":
-                kw = dict(
-                    ablation="resample",
-                    donor_tables=[
-                        (r["Xtr"], r["ytr"], r["Xte"])
-                        for tid, r in records.items()
-                        if tid != task_id
-                    ],
-                    n_donors=args.n_donors,
-                    seed=SEED,
-                )
+            donor_tables = [
+                (r["Xtr"], r["ytr"], r["Xte"]) for tid, r in records.items() if tid != task_id
+            ]
             effects = direct_total_effect(
-                adapter, rec["Xtr"], rec["ytr"], rec["Xte"], rec["y_test"], rec["n_classes"], **kw
+                adapter,
+                rec["Xtr"],
+                rec["ytr"],
+                rec["Xte"],
+                rec["y_test"],
+                rec["n_classes"],
+                donor_tables=donor_tables,
+                n_donors=args.n_donors,
+                seed=SEED,
             )
             native_final = native_final_auc(
                 adapter, rec["Xtr"], rec["ytr"], rec["Xte"], rec["y_test"], rec["n_classes"]
@@ -129,7 +125,7 @@ def main():
                 "n_test": rec["n_test"],
             }
             print(
-                f"[{i + 1}/{len(records)}] task {task_id} ({args.ablation}): "
+                f"[{i + 1}/{len(records)}] task {task_id}: "
                 f"native AUC {native_final:.3f} | rows {rec['n_train']}+{rec['n_test']}",
                 flush=True,
             )

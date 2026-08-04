@@ -21,9 +21,26 @@ from tfm_lens.evaluation.layerwise import (
     layerwise_auc,
     layerwise_gt_logit,
     layerwise_margin,
-    predict_layers,
     predict_layers_logits,
 )
+from tfm_lens.utils import clone_residual
+
+
+def native_final_logits(
+    adapter: ModelAdapter,
+    X_train: torch.Tensor,
+    y_train: torch.Tensor,
+    X_test: torch.Tensor,
+    n_classes: int,
+) -> np.ndarray:
+    """The model's own decoder on the **final** layer → ``[n_test, n_classes]`` logits.
+
+    The native readout (distinct from the fine-tuned probes) — the ruler the DE/TE
+    scatter uses. Wrap the call in a ``skip_layer`` / ``inject_delta`` context to read
+    it under ablation.
+    """
+    native = [adapter.decoder_template()] * (adapter.n_layers + 1)
+    return predict_layers_logits(adapter, native, X_train, y_train, X_test, n_classes)[-1]
 
 
 def native_final_auc(
@@ -36,9 +53,8 @@ def native_final_auc(
 ) -> float:
     """AUC of the model's own decoder on the final layer — the paper's 'main' score
     (used for normalization and final_diff; distinct from the fine-tuned probes)."""
-    native = [adapter.decoder_template()] * (adapter.n_layers + 1)
-    probs = predict_layers(adapter, native, X_train, y_train, X_test, n_classes)
-    return layerwise_auc([probs[-1]], y_test)[0]
+    logits = native_final_logits(adapter, X_train, y_train, X_test, n_classes)
+    return layerwise_auc([softmax(logits, axis=1)], y_test)[0]
 
 
 def ablation_diffs(
@@ -150,10 +166,6 @@ def ablation_sweep(
     return {"baseline": baseline, "skip": skip, "zscore": {"mu": mu, "sigma": sigma}}
 
 
-def _clone_residual(r):
-    return tuple(t.clone() for t in r) if isinstance(r, tuple) else r.clone()
-
-
 def _target_residuals(adapter, decoders, X_train, y_train, X_test):
     """Clean per-layer *input* residuals of the target forward — the shape + row-split
     the donor draw fills against (values unused). One extra forward per task."""
@@ -163,7 +175,7 @@ def _target_residuals(adapter, decoders, X_train, y_train, X_test):
     y = y_train.unsqueeze(0).to(device)
     with torch.no_grad(), capture_layers(adapter) as cache:
         adapter.forward_frozen(X, y, eval_pos)
-        return [_clone_residual(adapter.residual_of(cache[m])) for m in range(adapter.n_layers)]
+        return [clone_residual(adapter.residual_of(cache[m])) for m in range(adapter.n_layers)]
 
 
 def _average_over_donors(per_donor: list[dict], n_layers: int) -> dict:

@@ -14,3 +14,9 @@ def seed_everything(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+
+
+def clone_residual(r: "torch.Tensor | tuple"):
+    """Clone a residual, preserving stream structure — a Tensor, or a
+    ``(support, query)`` tuple for double-stream models (Mitra)."""
+    return tuple(t.clone() for t in r) if isinstance(r, tuple) else r.clone()
