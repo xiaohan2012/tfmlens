@@ -1,5 +1,5 @@
 """Direct (DE) and total (TE) effect on the **final decoder** — path-patching
-取法 B (issue #44, Part 1).
+method B (issue #44, Part 1).
 
 Two rulers for the Hydra DE–TE scatter, both read through the *same* native decoder
 so they're comparable by construction (not per-layer fine-tuned decoders):
@@ -12,8 +12,9 @@ so they're comparable by construction (not per-layer fine-tuned decoders):
   ``a_m`` = the clean contribution layer m writes into the residual (r_m − r_{m-1});
   ``ã_m`` = what the ablation writes instead. One clean forward captures every
   ``a_m``; DE(m) for all m is residual arithmetic through the TRUE decoder
-  (``readout`` incl. final LN with σ recomputed + native decoder). Faithful 取法 B —
-  the decoder runs on the whole residual, NOT a fixed û on a single layer (取法 A).
+  (``readout`` incl. final LN with σ recomputed + native decoder). Faithful method B —
+  the decoder runs on the whole residual, NOT a fixed û on a single layer (that's method A,
+  the logit-lens).
 
 - **TE(m) — total effect.** Downstream must react → one real forward per m
   (``inject_delta``), read the final layer through the same native decoder
@@ -42,7 +43,7 @@ from tfm_lens.utils import clone_residual
 
 # A residual stream: a Tensor, or a ``(support, query)`` pair for double-stream models.
 Residual = torch.Tensor | tuple[torch.Tensor, ...]
-Coords = dict[str, float]  # the two scatter axes, keyed {"gt_logit", "margin"}
+MetricPair = dict[str, float]  # the two scatter axes, keyed {"gt_logit", "margin"}
 
 
 def final_decoder_logits(
@@ -55,7 +56,7 @@ def final_decoder_logits(
     """The native decoder on a residual → ``[n_test, n_classes]`` logits (numpy).
 
     The **shared ruler** for DE and TE: ``adapter.readout`` (stream/token pick +
-    final LN, σ recomputed on *this* residual) then the native decoder. 取法 B — the
+    final LN, σ recomputed on *this* residual) then the native decoder. method B — the
     true decoder on the whole residual, not a fixed û on one layer's write.
 
     ``residual`` is in ``residual_of`` coordinates (a Tensor, or a
@@ -84,7 +85,7 @@ def patched_residual(
     return clean_residual - clean_contribution + replacement
 
 
-def _coords(logits: np.ndarray, y_test: np.ndarray) -> Coords:
+def _metric_pair(logits: np.ndarray, y_test: np.ndarray) -> MetricPair:
     """The two scatter axes off one final-decoder logit array. The metric math is
     reused from ``layerwise_*``; this only bundles gt_logit (x) + margin (y)."""
     return {
@@ -93,12 +94,12 @@ def _coords(logits: np.ndarray, y_test: np.ndarray) -> Coords:
     }
 
 
-def _effect(clean: Coords, ablated: Coords) -> Coords:
-    """Effect = clean − ablated per coordinate (the scatter value)."""
+def _drop_from_clean(clean: MetricPair, ablated: MetricPair) -> MetricPair:
+    """The effect (DE or TE) = clean − ablated per coordinate (the scatter value)."""
     return {k: clean[k] - ablated[k] for k in clean}
 
 
-def _mean_coords(per_donor: list[Coords]) -> Coords:
+def _mean_over_donors(per_donor: list[MetricPair]) -> MetricPair:
     """Average each coordinate over donors."""
     return {k: float(np.mean([c[k] for c in per_donor])) for k in per_donor[0]}
 
@@ -147,14 +148,14 @@ def direct_total_effect(
         ]
         clean_residual = clone_residual(adapter.residual_of(cache[-1]))
         clean_logits = final_decoder_logits(adapter, clean_residual, decoder, eval_pos, n_classes)
-    clean = _coords(clean_logits, y_test)
+    clean = _metric_pair(clean_logits, y_test)
     mu, sigma = gt_logit_zscore_stats([clean_logits], y_test)
 
     k = min(n_donors, len(donor_tables))
     picks = np.random.default_rng(seed).permutation(len(donor_tables))[:k]
 
-    de_donors: list[dict[int, Coords]] = []
-    te_donors: list[dict[int, Coords]] = []
+    de_donors: list[dict[int, MetricPair]] = []
+    te_donors: list[dict[int, MetricPair]] = []
     for di, i in enumerate(picks):
         Xd_train, yd_train, Xd_test = donor_tables[i]
         eval_pos_d = Xd_train.shape[0]
@@ -162,8 +163,8 @@ def direct_total_effect(
         yd = yd_train.unsqueeze(0).to(device)
         donor_layer_deltas = donor_deltas(adapter, Xd, yd, eval_pos_d)
         draw = np.random.default_rng(seed + 1 + di)  # per-donor position draw
-        de_m: dict[int, Coords] = {}
-        te_m: dict[int, Coords] = {}
+        de_m: dict[int, MetricPair] = {}
+        te_m: dict[int, MetricPair] = {}
         for m in range(adapter.n_layers):
             replacement = build_donor_delta(
                 target_inputs[m],
@@ -173,18 +174,18 @@ def direct_total_effect(
                 adapter.label_token_index,
                 draw,
             )
-            # DE: arithmetic — swap m's write, read the native decoder (取法 B).
+            # DE: arithmetic — swap m's write, read the native decoder (method B).
             r_patched = patched_residual(clean_residual, clean_contributions[m], replacement)
             de_logits = final_decoder_logits(adapter, r_patched, decoder, eval_pos, n_classes)
-            de_m[m] = _coords(de_logits, y_test)
+            de_m[m] = _metric_pair(de_logits, y_test)
             # TE: real forward, m ablated + downstream free; same native decoder.
             with inject_delta(adapter, m, replacement):
                 te_logits = native_final_logits(adapter, X_train, y_train, X_test, n_classes)
-            te_m[m] = _coords(te_logits, y_test)
+            te_m[m] = _metric_pair(te_logits, y_test)
         de_donors.append(de_m)
         te_donors.append(te_m)
 
     layers = range(adapter.n_layers)
-    de = {m: _effect(clean, _mean_coords([d[m] for d in de_donors])) for m in layers}
-    te = {m: _effect(clean, _mean_coords([d[m] for d in te_donors])) for m in layers}
+    de = {m: _drop_from_clean(clean, _mean_over_donors([d[m] for d in de_donors])) for m in layers}
+    te = {m: _drop_from_clean(clean, _mean_over_donors([d[m] for d in te_donors])) for m in layers}
     return {"clean": clean, "de": de, "te": te, "zscore": {"mu": mu, "sigma": sigma}}

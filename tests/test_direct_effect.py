@@ -1,11 +1,11 @@
-"""Path-patching DE / TE (取法 B) — ``evaluation.direct_effect``.
+"""Path-patching DE / TE (method B) — ``evaluation.direct_effect``.
 
 Headline invariant: the DE **arithmetic** ``patched_residual`` (``r_L − a_m + ã_m``,
 no per-layer forward) reproduces a real **frozen-downstream forward** (ablate m to
 ã_m, pin every downstream layer to its clean contribution). Holds for *any* ã_m, any
 head, any stream layout ⇒ the O(1)-forward shortcut is exact.
 
-Also: on a linear head DE collapses to the logit-lens closed form (取法 A == B); and
+Also: on a linear head DE collapses to the logit-lens closed form (method A == B); and
 the resample sweep runs with the right shape/keys.
 """
 
@@ -170,7 +170,7 @@ def test_patched_residual_equals_frozen_forward(make_adapter, row_shape):
 
 
 def test_de_matches_logit_lens_on_linear_head():
-    """Linear head ⇒ clean − patched = decode(a_m − ã_m) − decode(0) (bias cancels) = 取法 A."""
+    """Linear head ⇒ clean − patched = decode(a_m − ã_m) − decode(0) (bias cancels) — method A."""
     adapter = BinaryToy3D()
     Xtr, ytr, Xte, _ = _inputs((ToyAdapter3D.HIDDEN,))
     decoder = adapter.decoder_template()

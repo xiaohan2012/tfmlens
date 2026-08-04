@@ -2,7 +2,7 @@
 
 Each point = one (layer, dataset). Axes (both through the native decoder, same ruler):
 
-- x = DE (direct effect, path-patching 取法 B)
+- x = DE (direct effect, path-patching (method B))
 - y = TE (total effect, ablate-and-react)
 
 Read on gt_logit, z-scored per task by its clean-baseline σ (Hydra's logit units) so
