@@ -22,7 +22,8 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from _de_te_common import MODEL_LABELS, de_scale, load_de_json
+
+from tfm_lens.evaluation.de_results import MODEL_LABELS, de_scale, load_de_json
 
 _REDUNDANT_TOL = 0.1  # |DE| below this (σ units) = redundant stripe, excluded from CE stats
 

@@ -1,9 +1,11 @@
-"""Shared helpers for the DE/TE/CE plot scripts (``plot_de_te_scatter``,
-``plot_de_te_perrow``, ``plot_ce_de_law``).
+"""Reader for the ``de_<model>.json`` contract written by ``direct_total_effect``.
 
-One reader for the ``de_<model>.json`` contract emitted by
-``direct_total_effect`` — so the model labels, the loader, and the per-task
-z-score rule live in one place instead of drifting across three scripts.
+Lives next to the producer (``direct_effect.py``) so both ends of the contract move
+together — the loader and the per-task z-score rule can't drift out of sync with the
+fields the sweep emits.
+
+Consumers: ``scripts/plot_de_te_scatter.py``, ``plot_de_te_perrow.py``,
+``plot_ce_de_law.py``. No matplotlib here — this module only reads and scales.
 """
 
 import json
