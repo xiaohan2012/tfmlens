@@ -86,7 +86,7 @@ def layerwise_auc(probs: list[np.ndarray], y_test: np.ndarray) -> list[float]:
     return scores
 
 
-def _gt_logit(z: np.ndarray, y_test: np.ndarray) -> np.ndarray:
+def gt_logit(z: np.ndarray, y_test: np.ndarray) -> np.ndarray:
     """True-class logit per row: ``z[i, y[i]]`` (``y_test`` must be an array)."""
     return z[np.arange(y_test.shape[0]), y_test]
 
@@ -97,7 +97,7 @@ def layerwise_gt_logit(logits: list[np.ndarray], y_test: np.ndarray) -> list[flo
     Fixed coordinate (one-hot GT projection) -> additive -> feeds DE/IE; any class count.
     """
     y_test = np.asarray(y_test)
-    return [float(_gt_logit(z, y_test).mean()) for z in logits]
+    return [float(gt_logit(z, y_test).mean()) for z in logits]
 
 
 def layerwise_margin(logits: list[np.ndarray], y_test: np.ndarray) -> list[float]:
@@ -115,7 +115,7 @@ def layerwise_margin(logits: list[np.ndarray], y_test: np.ndarray) -> list[float
     for z in logits:
         if z.shape[1] != 2:
             raise ValueError(f"layerwise_margin is binary-only; got {z.shape[1]} classes")
-        scores.append(float(np.median(_gt_logit(z, y_test) - _gt_logit(z, 1 - y_test))))
+        scores.append(float(np.median(gt_logit(z, y_test) - gt_logit(z, 1 - y_test))))
     return scores
 
 
@@ -129,7 +129,7 @@ def gt_logit_zscore_stats(
     - raises if sigma == 0 (degenerate task).
     """
     y_test = np.asarray(y_test)
-    gt = _gt_logit(clean_logits[-1], y_test)  # [-1] = final layer (the task's output scale)
+    gt = gt_logit(clean_logits[-1], y_test)  # [-1] = final layer (the task's output scale)
     mu, sigma = float(gt.mean()), float(gt.std())
     if sigma == 0.0:
         raise ValueError("degenerate task: final-layer GT-logit has zero spread across rows")

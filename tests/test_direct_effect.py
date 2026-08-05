@@ -204,6 +204,33 @@ def test_resample_runs_with_shape_and_keys():
                 assert np.isfinite(res[effect][m][coord])
 
 
+def test_per_row_shape_and_aggregate_consistency():
+    """``per_row=True`` adds de_rows/te_rows/clean_rows of length n_test; and for the
+    **linear** gt_logit coordinate the aggregate DE(m) equals the mean of per-row DE(m)
+    (mean commutes with subtraction) — the de-aggregation is faithful, not a new metric."""
+    adapter = BinaryToy3D()
+    Xtr, ytr, Xte, y_test = _inputs((ToyAdapter3D.HIDDEN,), seed=1, n_test=5)
+    donor_tables = [
+        (dtr, dytr, dte)
+        for dtr, dytr, dte, _ in (_inputs((ToyAdapter3D.HIDDEN,), seed=s) for s in (2, 3, 4))
+    ]
+    res = direct_total_effect(
+        adapter, Xtr, ytr, Xte, y_test, 2, donor_tables, n_donors=3, seed=0, per_row=True
+    )
+    n_test = Xte.shape[0]
+    assert len(res["clean_rows"]["gt_logit"]) == n_test
+    for effect in ("de_rows", "te_rows"):
+        assert set(res[effect]) == set(range(adapter.n_layers))
+        for m in range(adapter.n_layers):
+            for coord in ("gt_logit", "margin"):
+                assert len(res[effect][m][coord]) == n_test
+                assert np.all(np.isfinite(res[effect][m][coord]))
+    for m in range(adapter.n_layers):
+        agg = res["de"][m]["gt_logit"]
+        per_row_mean = float(np.mean(res["de_rows"][m]["gt_logit"]))
+        assert agg == pytest.approx(per_row_mean, abs=1e-5)
+
+
 def test_resample_needs_donor_tables():
     adapter = BinaryToy3D()
     Xtr, ytr, Xte, y_test = _inputs((ToyAdapter3D.HIDDEN,))

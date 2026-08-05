@@ -50,6 +50,11 @@ def _parse_args():
     p.add_argument(
         "--n-donors", type=int, default=8, help="resample: donors drawn per target (LOO)"
     )
+    p.add_argument(
+        "--per-row",
+        action="store_true",
+        help="also store un-aggregated per-test-row DE/TE (de_rows/te_rows/clean_rows)",
+    )
     return p.parse_args()
 
 
@@ -87,6 +92,7 @@ def main():
                 donor_tables=donor_tables,
                 n_donors=args.n_donors,
                 seed=SEED,
+                per_row=args.per_row,
             )
             native_final = native_final_auc(
                 adapter, rec["Xtr"], rec["ytr"], rec["Xte"], rec["y_test"], rec["n_classes"]

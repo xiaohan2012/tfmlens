@@ -34,6 +34,7 @@ from tfm_lens.core.capture import capture_layers
 from tfm_lens.core.interventions import inject_delta
 from tfm_lens.core.resample_ablation import build_donor_delta, donor_deltas, layer_deltas
 from tfm_lens.evaluation.layerwise import (
+    gt_logit,
     gt_logit_zscore_stats,
     layerwise_gt_logit,
     layerwise_margin,
@@ -94,14 +95,39 @@ def _metric_pair(logits: np.ndarray, y_test: np.ndarray) -> MetricPair:
     }
 
 
+def _metric_pair_rows(logits: np.ndarray, y_test: np.ndarray) -> dict[str, np.ndarray]:
+    """Per-row version of :func:`_metric_pair`: no reduction over test rows.
+
+    - ``gt_logit``: ``z[i, y_i]``              → array ``[n_test]``
+    - ``margin``:   ``z[i, y_i] − z[i, 1−y_i]``  → array ``[n_test]`` (binary; NaN if multiclass)
+
+    De-aggregating exposes row-level sign cancellation that the mean/median hides:
+    a layer's aggregate CE≈0 can be all-zero OR canceling rows.
+    """
+    gt = gt_logit(logits, y_test)
+    if logits.shape[1] == 2:
+        margin = gt - gt_logit(logits, 1 - y_test)
+    else:
+        margin = np.full_like(gt, np.nan, dtype=float)
+    return {"gt_logit": gt, "margin": margin}
+
+
 def _drop_from_clean(clean: MetricPair, ablated: MetricPair) -> MetricPair:
-    """The effect (DE or TE) = clean − ablated per coordinate (the scatter value)."""
+    """The effect (DE or TE) = clean − ablated per coordinate (the scatter value).
+
+    Works elementwise for both scalar :class:`MetricPair` and per-row array pairs.
+    """
     return {k: clean[k] - ablated[k] for k in clean}
 
 
 def _mean_over_donors(per_donor: list[MetricPair]) -> MetricPair:
     """Average each coordinate over donors."""
     return {k: float(np.mean([c[k] for c in per_donor])) for k in per_donor[0]}
+
+
+def _mean_over_donors_rows(per_donor: list[dict[str, np.ndarray]]) -> dict[str, np.ndarray]:
+    """Average each per-row coordinate over donors (row axis preserved)."""
+    return {k: np.mean([c[k] for c in per_donor], axis=0) for k in per_donor[0]}
 
 
 def direct_total_effect(
@@ -114,6 +140,7 @@ def direct_total_effect(
     donor_tables: list[tuple],
     n_donors: int = 8,
     seed: int = 0,
+    per_row: bool = False,
 ) -> dict:
     """Per-layer DE(m) and TE(m) on the native decoder, for one table (resample ablation).
 
@@ -123,6 +150,15 @@ def direct_total_effect(
          "de":    {m: {"gt_logit", "margin"}},      # DE(m) = clean − path-patched
          "te":    {m: {"gt_logit", "margin"}},      # TE(m) = clean − ablate-and-react
          "zscore": {"mu", "sigma"}}                 # cross-task gt_logit normalizer
+
+    With ``per_row=True`` also stores un-aggregated per-test-row DE/TE (donor-averaged)::
+
+        {"clean_rows": {"gt_logit": [...], "margin": [...]},   # length n_test
+         "de_rows":    {m: {"gt_logit": [...], "margin": [...]}},
+         "te_rows":    {m: {"gt_logit": [...], "margin": [...]}}}
+
+    Same forwards as the aggregate path — just skips the mean/median reduction, to check
+    whether row-level sign cancellation hides a self-repair signal.
 
     DE and TE share one donor draw per (m, donor) → their difference (CE, Part 2) is a
     clean pairing. ``donor_tables`` = leave-one-out real tables; ``ã_m`` = a role-matched
@@ -156,6 +192,8 @@ def direct_total_effect(
 
     de_donors: list[dict[int, MetricPair]] = []
     te_donors: list[dict[int, MetricPair]] = []
+    de_row_donors: list[dict[int, dict[str, np.ndarray]]] = []
+    te_row_donors: list[dict[int, dict[str, np.ndarray]]] = []
     for di, i in enumerate(picks):
         Xd_train, yd_train, Xd_test = donor_tables[i]
         eval_pos_d = Xd_train.shape[0]
@@ -165,6 +203,8 @@ def direct_total_effect(
         draw = np.random.default_rng(seed + 1 + di)  # per-donor position draw
         de_m: dict[int, MetricPair] = {}
         te_m: dict[int, MetricPair] = {}
+        de_row_m: dict[int, dict[str, np.ndarray]] = {}
+        te_row_m: dict[int, dict[str, np.ndarray]] = {}
         for m in range(adapter.n_layers):
             replacement = build_donor_delta(
                 target_inputs[m],
@@ -182,10 +222,36 @@ def direct_total_effect(
             with inject_delta(adapter, m, replacement):
                 te_logits = native_final_logits(adapter, X_train, y_train, X_test, n_classes)
             te_m[m] = _metric_pair(te_logits, y_test)
+            if per_row:
+                de_row_m[m] = _metric_pair_rows(de_logits, y_test)
+                te_row_m[m] = _metric_pair_rows(te_logits, y_test)
         de_donors.append(de_m)
         te_donors.append(te_m)
+        if per_row:
+            de_row_donors.append(de_row_m)
+            te_row_donors.append(te_row_m)
 
     layers = range(adapter.n_layers)
     de = {m: _drop_from_clean(clean, _mean_over_donors([d[m] for d in de_donors])) for m in layers}
     te = {m: _drop_from_clean(clean, _mean_over_donors([d[m] for d in te_donors])) for m in layers}
-    return {"clean": clean, "de": de, "te": te, "zscore": {"mu": mu, "sigma": sigma}}
+    out = {"clean": clean, "de": de, "te": te, "zscore": {"mu": mu, "sigma": sigma}}
+    if per_row:
+        clean_rows = _metric_pair_rows(clean_logits, y_test)
+        out["clean_rows"] = {k: v.tolist() for k, v in clean_rows.items()}
+        out["de_rows"] = _rows_effect(clean_rows, de_row_donors, layers)
+        out["te_rows"] = _rows_effect(clean_rows, te_row_donors, layers)
+    return out
+
+
+def _rows_effect(
+    clean_rows: dict[str, np.ndarray],
+    row_donors: list[dict[int, dict[str, np.ndarray]]],
+    layers,
+) -> dict[int, dict[str, list[float]]]:
+    """Per-layer per-row effect = clean_rows − donor-mean(ablated_rows), as JSON lists."""
+    result = {}
+    for m in layers:
+        donor_mean = _mean_over_donors_rows([d[m] for d in row_donors])
+        drop = _drop_from_clean(clean_rows, donor_mean)
+        result[m] = {k: v.tolist() for k, v in drop.items()}
+    return result
