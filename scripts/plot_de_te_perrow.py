@@ -39,6 +39,11 @@ def _parse_args():
     p.add_argument("--in-dir", type=Path, default=Path("out"))
     p.add_argument("--out", type=Path, default=Path("out/de_te_perrow.png"))
     p.add_argument("--coord", choices=["gt_logit", "margin"], default="margin")
+    p.add_argument(
+        "--hist-only",
+        action="store_true",
+        help="draw only the per-row CE histogram row (drop the hexbin)",
+    )
     return p.parse_args()
 
 
@@ -120,19 +125,29 @@ def main():
         raise SystemExit("no input files (expected in-dir/de_<model>.json with --per-row)")
 
     n = len(loaded)
-    fig, axes = plt.subplots(2, n, figsize=(4.2 * n, 8.2), squeeze=False, constrained_layout=True)
+    nrow = 1 if args.hist_only else 2
+    fig, axes = plt.subplots(
+        nrow, n, figsize=(4.2 * n, 3.8 * nrow), squeeze=False, constrained_layout=True
+    )
     print(f"\nper-row DE–TE ({args.coord}) — is aggregate CE≈0 real or cancellation?")
     for j, (m, res) in enumerate(loaded.items()):
         de, te = _points(res, args.coord)
-        _draw_hexbin(axes[0][j], de, te, _MODEL_LABELS.get(m, m))
-        _draw_ce_hist(axes[1][j], de, te)
+        if args.hist_only:
+            _draw_ce_hist(axes[0][j], de, te)
+            axes[0][j].set_title(_MODEL_LABELS.get(m, m), fontsize=11)
+        else:
+            _draw_hexbin(axes[0][j], de, te, _MODEL_LABELS.get(m, m))
+            _draw_ce_hist(axes[1][j], de, te)
         print(f"  {m:10s}  {_summary(de, te)}")
-    axes[0][0].set_ylabel("TE  (per-row, z-scored)")
-    axes[1][0].set_ylabel("row count")
-    fig.suptitle(
-        f"Per-row DE vs TE · {args.coord} — row-level sign cancellation check",
-        fontweight="bold",
+    if not args.hist_only:
+        axes[0][0].set_ylabel("TE  (per-row, z-scored)")
+    axes[-1][0].set_ylabel("row count")
+    title = (
+        f"Per-row CE distribution · {args.coord} — unimodal at 0 (not cancellation/dilution)"
+        if args.hist_only
+        else f"Per-row DE vs TE · {args.coord} — row-level sign cancellation check"
     )
+    fig.suptitle(title, fontweight="bold")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.out, dpi=140)
     print(f"\nwrote {args.out}")
