@@ -1,11 +1,17 @@
-"""Ablation sweep for the self-repair analysis.
+"""balef2026 (`Is One Layer Enough?`) Exp6 — ablate a layer, decode every depth.
 
-One frozen forward per condition (baseline, then skip each layer), decode every
-depth with the fine-tuned decoders, reduce to all metrics off the same logits.
+One frozen forward per condition (baseline, then ablate each layer), decoded at every
+depth by **its own fine-tuned decoder**, reduced to all metrics off the same logits.
+That per-depth-tuned-decoder design is what makes this the paper's experiment rather
+than a generic ablation.
 
 - per-depth metrics: AUC / GT-logit / margin (one forward feeds all).
 - ``zscore``: clean-baseline (mu, sigma) for cross-task GT-logit normalization.
-- skip is orthogonal — ``skip_layer`` wraps the same forward.
+- the ablation is orthogonal — ``skip_layer`` / ``inject_delta`` wraps the same forward.
+
+The dip-then-recover this produces is a **decodability** trajectory, not evidence of
+active compensation: measuring that needs the frozen-downstream DE in ``path_patching``
+(#45 — no self-repair in TFMs).
 """
 
 import numpy as np
@@ -14,8 +20,8 @@ from scipy.special import softmax
 
 from tfm_lens.adapters.base import ModelAdapter
 from tfm_lens.core.capture import capture_layers
+from tfm_lens.core.donor_delta import build_donor_delta, donor_deltas
 from tfm_lens.core.interventions import inject_delta, skip_layer
-from tfm_lens.core.resample_ablation import build_donor_delta, donor_deltas
 from tfm_lens.evaluation.layerwise import (
     gt_logit_zscore_stats,
     layerwise_auc,
@@ -23,42 +29,8 @@ from tfm_lens.evaluation.layerwise import (
     layerwise_margin,
     predict_layers_logits,
 )
+from tfm_lens.evaluation.native_readout import native_final_auc
 from tfm_lens.utils import clone_residual
-
-
-def native_final_logits(
-    adapter: ModelAdapter,
-    X_train: torch.Tensor,
-    y_train: torch.Tensor,
-    X_test: torch.Tensor,
-    n_classes: int,
-) -> np.ndarray:
-    """The model's own decoder on the **final** layer → ``[n_test, n_classes]`` logits.
-
-    The native readout (distinct from the fine-tuned probes) — the ruler the DE/TE
-    scatter uses. Wrap the call in a ``skip_layer`` / ``inject_delta`` context to read
-    it under ablation.
-    """
-    # predict_layers_logits wants one decoder per depth; here every depth is the one
-    # shared native decoder (the same instance repeated). Fine because we read only the
-    # final layer ([-1]) and the decoder is stateless — depths never diverge. Do NOT
-    # reuse this list to read *intermediate* depths expecting independent decoders.
-    native = [adapter.decoder_template()] * (adapter.n_layers + 1)
-    return predict_layers_logits(adapter, native, X_train, y_train, X_test, n_classes)[-1]
-
-
-def native_final_auc(
-    adapter: ModelAdapter,
-    X_train: torch.Tensor,
-    y_train: torch.Tensor,
-    X_test: torch.Tensor,
-    y_test: np.ndarray,
-    n_classes: int,
-) -> float:
-    """AUC of the model's own decoder on the final layer — the paper's 'main' score
-    (used for normalization and final_diff; distinct from the fine-tuned probes)."""
-    logits = native_final_logits(adapter, X_train, y_train, X_test, n_classes)
-    return layerwise_auc([softmax(logits, axis=1)], y_test)[0]
 
 
 def ablation_diffs(
@@ -70,14 +42,15 @@ def ablation_diffs(
     y_test: np.ndarray,
     n_classes: int,
 ) -> list[tuple[int, float, float]]:
-    """Per ablated layer m: ``(m, immediate_diff, final_diff)`` — the two
-    normalized AUC drops that reveal self-repair.
+    """Per ablated layer m: ``(m, immediate_diff, final_diff)`` — the paper's two
+    normalized AUC drops.
 
     Both diffs are normalized by the baseline native-final AUC (floored at 0.5):
     ``immediate_diff`` is the fine-tuned decode right after the neutered layer
     (depth m+1) vs baseline at the same depth; ``final_diff`` is the model's
-    native final prediction under ablation vs baseline. Self-repair = large
-    immediate drop, small final drop.
+    native final prediction under ablation vs baseline. The paper reads a large
+    immediate drop with a small final drop as self-repair; it is equally the
+    signature of redundancy (see ``path_patching``).
     """
     sweep = ablation_sweep(adapter, decoders, X_train, y_train, X_test, y_test, n_classes)
     baseline_ft = sweep["baseline"]["auc"]

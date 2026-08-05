@@ -1,4 +1,4 @@
-"""Run the exp6 self-repair sweep over the TabArena binary tasks.
+"""Run the balef2026 Exp6 ablation sweep over the TabArena binary tasks.
 
 For each dataset: load -> (optional) subsample -> preprocess -> ablation_sweep
 (the per-depth AUC trajectories) + native_final_auc (the per-dataset normalizer)
@@ -15,27 +15,28 @@ target's donors are the other loaded tasks (leave-one-out), ``--n-donors`` drawn
 without replacement, metric averaged over donors. On-distribution + norm-preserving;
 run it alongside the default ``zero`` for the skip-vs-resample cross-check.
 
-    uv run --group eval python scripts/run_self_repair_sweep.py --model limix_2m
-    uv run --group tabicl --group eval python scripts/run_self_repair_sweep.py \
+    uv run --group eval python scripts/run_balef_exp6_sweep.py --model limix_2m
+    uv run --group tabicl --group eval python scripts/run_balef_exp6_sweep.py \
         --model tabicl_v2 --subsample-train 0 --subsample-test 0 --skip-diffs \
-        --out out/self_repair_tabicl.json
-    uv run --group eval python scripts/run_self_repair_sweep.py --model limix_2m \
-        --ablation resample --out out/self_repair_limix_resample.json
+        --out out/balef_exp6_tabicl.json
+    uv run --group eval python scripts/run_balef_exp6_sweep.py --model limix_2m \
+        --ablation resample --out out/balef_exp6_limix_resample.json
 """
 
 import argparse
 import json
 from pathlib import Path
 
+from tfm_lens.evaluation.balef_exp6 import ablation_diffs, ablation_sweep
 from tfm_lens.evaluation.datasets import TABARENA_BINARY_TASK_IDS, load_task_record
 from tfm_lens.evaluation.layerwise import load_decoders
+from tfm_lens.evaluation.native_readout import native_final_auc
 from tfm_lens.evaluation.preprocess import (
     limix_preprocess,
     mitra_preprocess,
     tabfm_preprocess,
     tabicl_preprocess,
 )
-from tfm_lens.evaluation.self_repair import ablation_diffs, ablation_sweep, native_final_auc
 from tfm_lens.finetune.__main__ import build_adapter
 
 SEED = 0
@@ -52,7 +53,7 @@ def _parse_args():
     p.add_argument("--model", choices=list(MODELS), default="limix_2m")
     p.add_argument("--subsample-train", type=int, default=500, help="max train rows; 0 = all")
     p.add_argument("--subsample-test", type=int, default=200, help="max test rows; 0 = all")
-    p.add_argument("--out", type=Path, default=Path("out/self_repair.json"))
+    p.add_argument("--out", type=Path, default=Path("out/balef_exp6.json"))
     p.add_argument("--skip-diffs", action="store_true", help="skip ablation_diffs (scatter data)")
     p.add_argument("--device", default="cpu", help="cpu or cuda (Mitra's full tables need cuda)")
     p.add_argument("--tasks", default=None, help="comma-separated task ids; default all 15")

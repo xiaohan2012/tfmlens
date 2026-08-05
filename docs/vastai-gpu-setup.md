@@ -45,7 +45,7 @@ git checkout <branch>                       # a fresh clone is on main — see n
 Notes:
 - **Branch matters — a fresh clone defaults to `main`.** Features under active
   development live on their branch, not `main`: e.g. the GT-logit sweep metric +
-  `plot_self_repair.py --metric gt_logit` are on `feat/logit-metric`. Running the
+  `plot_balef_exp6_trajectory.py --metric gt_logit` are on `feat/logit-metric`. Running the
   sweep from `main` silently gives you only the AUC trajectory. `git checkout` the
   branch that has the code you actually want **before** installing / running.
 - Finetune only needs core + `tabicl` (synthetic prior); it does **not** need the
@@ -119,7 +119,7 @@ Exit-code triage:
 Inside tmux, and **`mkdir -p out` first** (see the redirect trap below):
 ```bash
 mkdir -p out
-tmux new -d -s sweep "/venv/main/bin/python scripts/run_self_repair_sweep.py \
+tmux new -d -s sweep "/venv/main/bin/python scripts/run_balef_exp6_sweep.py \
   --model <model> --subsample-train 1000 --subsample-test 500 \
   --skip-diffs --device cuda --out out/<model>.json > out/<model>.log 2>&1"
 ```
@@ -135,7 +135,7 @@ tmux new -d -s sweep "/venv/main/bin/python scripts/run_self_repair_sweep.py \
   `mkdir -p out` *before* launching tmux, not inside it.
 - High-feature tables may OOM on VRAM: rerun those alone with
   `--tasks <ids> --subsample-train 3000`, then merge the json.
-- Plot: `python scripts/plot_self_repair.py --model <model>`
+- Plot: `python scripts/plot_balef_exp6_trajectory.py --model <model>`
 
 ## 5. Copy files over a flaky / session-limited link (both directions)
 Same root cause as §2's "false success": the vast box drops long connections, so

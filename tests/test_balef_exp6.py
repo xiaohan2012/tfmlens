@@ -4,7 +4,8 @@ import numpy as np
 import pytest
 import torch
 
-from tfm_lens.evaluation.self_repair import ablation_diffs, ablation_sweep, native_final_auc
+from tfm_lens.evaluation.balef_exp6 import ablation_diffs, ablation_sweep
+from tfm_lens.evaluation.native_readout import native_final_auc
 from toys import ToyAdapter3D
 
 H = ToyAdapter3D.HIDDEN

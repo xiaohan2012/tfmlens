@@ -38,13 +38,13 @@ uv run --group viz python scripts/plot_de_te_perrow.py \
     --in-dir out/perrow --coord margin --hist-only --out out/fig2_perrow_cehist_margin.png
 
 # E2 — per-layer CE~DE law across depth (Hydra Fig-4d)
-uv run --group viz python scripts/plot_ce_de_law.py \
+uv run --group viz python scripts/plot_compensation_fit.py \
     --in-dir out/perrow --coord margin --agg --out out/layer_law_agg_margin.png
 
 # E2 — DE vs CE at the apex layer (Hydra Fig-4b)
-uv run --group viz python scripts/plot_ce_de_law.py \
+uv run --group viz python scripts/plot_compensation_fit.py \
     --in-dir out/perrow --coord margin --agg --apex-scatter --out out/apex_scatter_agg_margin.png
 ```
 
-- `dip_recover_fig8.png` = a copy of `out/self_repair_combined_fig8.png` (exp6 tuned-decoder trajectory), from an uncommitted local plot script.
+- `dip_recover_fig8.png` = a copy of `out/balef_exp6_combined_fig8.png` (exp6 tuned-decoder trajectory), from an uncommitted local plot script.
 - `hydra_ref_*.png` are screenshots from McGrath et al. 2023 — not reproducible from this repo.

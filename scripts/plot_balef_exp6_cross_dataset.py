@@ -1,4 +1,4 @@
-"""Cross-dataset / cross-model views of the exp6 self-repair sweep.
+"""Cross-dataset / cross-model views of the balef2026 Exp6 ablation sweep.
 
 Drills the per-depth sweep down to the task level and plots the net output
 effect of skipping each layer:
@@ -9,8 +9,8 @@ effect of skipping each layer:
 - **blue / TE < 0** — delete layer -> output *damaged* (layer does irreplaceable work).
 - **white / TE ~ 0** — output unchanged (repaired *or* redundant).
 
-Reuses ``plot_self_repair._normalize_task`` so numbers match the trajectory plots.
-Reads one sweep JSON per model (``run_self_repair_sweep.py`` output).
+Reuses ``plot_balef_exp6_trajectory._normalize_task`` so numbers match the trajectory plots.
+Reads one sweep JSON per model (``run_balef_exp6_sweep.py`` output).
 
 Draws three figures:
 - ``cross_dataset_heatmap.png``  — 2x2 task x layer TE heatmap, one panel per model,
@@ -20,7 +20,7 @@ Draws three figures:
 - ``cross_dataset_<model>_L<k>.png`` — per-task fan for one (model, layer); shows
   when a near-zero *average* TE hides a bimodal help/hurt split.
 
-    uv run --group viz python scripts/plot_cross_dataset.py
+    uv run --group viz python scripts/plot_balef_exp6_cross_dataset.py
 """
 
 import argparse
@@ -43,9 +43,9 @@ _MODELS = [
 
 
 def _load_psr():
-    """Import the sibling ``plot_self_repair.py`` script for its normalizers."""
+    """Import the sibling ``plot_balef_exp6_trajectory.py`` script for its normalizers."""
     here = Path(__file__).resolve().parent
-    spec = importlib.util.spec_from_file_location("psr", here / "plot_self_repair.py")
+    spec = importlib.util.spec_from_file_location("psr", here / "plot_balef_exp6_trajectory.py")
     psr = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(psr)
     return psr

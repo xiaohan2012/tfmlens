@@ -16,7 +16,7 @@ Context for anyone picking up a self-repair issue (#34–#37). Defines the terms
 
 ## 3. Reproduction & the open question
 
-We reproduced Figure 8 across **LimiX-2M, TabICLv2, Mitra, TabFM** (`evaluation/self_repair.py`, `scripts/plot_self_repair*.py`).
+We reproduced Figure 8 across **LimiX-2M, TabICLv2, Mitra, TabFM** (`evaluation/balef_exp6.py`, `scripts/plot_balef_exp6_*.py`).
 
 - **Observation.** Removing a mid-late layer changes the final output by ~0 → **total effect ≈ 0**.
 - **The trap.** "Removed, output unchanged" has two explanations that look identical:

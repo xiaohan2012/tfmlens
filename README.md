@@ -12,7 +12,8 @@ frozen forward → capture per-layer residual stream → [optional intervention]
 
 - **Exp4** — train per-layer decoders (the logit-lens tool itself; the one asset that costs compute).
 - **Exp5** — looping / repeating layers, quantified with the logit lens.
-- **Exp6** — self-repair: skip a layer, quantify how downstream layers compensate.
+- **Exp6** — ablate a layer, decode every depth (the paper's self-repair figure).
+  Whether downstream actually compensates is a separate question — see `evaluation/path_patching.py`.
 
 Model-specific code lives only in `adapters/`; capture and interventions use
 plain PyTorch forward hooks (no model-source surgery, no third-party lens libs).

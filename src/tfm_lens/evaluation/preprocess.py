@@ -1,9 +1,12 @@
-"""Drive the vendored LimiX preprocessing on one real table.
+"""Per-model preprocessing of one real table — one entry point per backbone
+(``limix_preprocess`` / ``tabicl_preprocess`` / ``tabfm_preprocess`` / ``mitra_preprocess``).
 
-Reproduces the no-retrieval single-worker pipeline that LimiX's predictor builds
+Each drives that model's own vendored pipeline so real OpenML tables land in the
+distribution the frozen model was trained on.
+
+LimiX: reproduces the no-retrieval single-worker pipeline its predictor builds
 (FilterValidFeatures -> quantile rebalance -> ordinal categorical encode ->
-feature shuffle) so real OpenML tables land in the distribution the frozen model
-was trained on. This is worker ① of ``cls_default_noretrieval.json``; the 4-way
+feature shuffle) — worker ① of ``cls_default_noretrieval.json``; the 4-way
 ensemble is deferred.
 """
 
@@ -62,7 +65,7 @@ def tabicl_preprocess(X_train, y_train, X_test, categorical_idx, seed=0):
     ``power`` normalization (standard-scale -> yeo-johnson -> outlier-clip). Fits
     on the train (support) rows, transforms both. Returns ``(X_train_p, X_test_p)``
     float32 arrays ready for ``predict_layers``. The 8-way ensemble (none/power x
-    feature shuffles) is deferred — self-repair needs a single clean forward.
+    feature shuffles) is deferred — the ablation sweep needs a single clean forward.
     """
     import pandas as pd
     from tabicl._sklearn.preprocessing import PreprocessingPipeline, TransformToNumerical
@@ -95,7 +98,7 @@ def tabfm_preprocess(X_train, y_train, X_test, categorical_idx, seed=0):
     Fits on the train (support) rows, transforms both. Returns ``(X_train_p,
     X_test_p)`` float32 arrays ready for ``predict_layers``. The ensemble
     (norm-method/shuffle/class-shift views) and the categorical embedding path
-    (cat_mask) are deferred — self-repair needs a single clean forward.
+    (cat_mask) are deferred — the ablation sweep needs a single clean forward.
     """
     from sklearn.compose import ColumnTransformer
     from sklearn.impute import SimpleImputer

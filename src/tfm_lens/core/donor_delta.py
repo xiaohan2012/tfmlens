@@ -14,7 +14,7 @@ Two steps:
   draw from the donor's same-role positions (with replacement — donor/target
   row & feature counts differ).
 
-The N=8 donor draws + metric averaging live in the sweep (``self_repair.py``);
+The N=8 donor draws + metric averaging live in the sweep (``balef_exp6.py``);
 this module builds one ``donor_delta`` per (donor, layer).
 """
 

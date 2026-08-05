@@ -1,7 +1,7 @@
 """TabFMAdapter integration (needs the TabFM checkpoint + the `tabfm` group).
 
 Runs the real frozen TabFM (single-stream 3D, like TabICL) through capture /
-skip / logit_lens: self-repair reads the ICL stage (``icl_predictor.tf_icl``),
+skip / logit_lens: the ablation sweep reads the ICL stage (``icl_predictor.tf_icl``),
 readout applies its RMSNorm then slices the test rows. Skipped without the
 `tabfm` group installed or a resolvable checkpoint.
 """
