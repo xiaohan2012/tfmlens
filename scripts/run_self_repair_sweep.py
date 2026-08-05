@@ -27,10 +27,7 @@ import argparse
 import json
 from pathlib import Path
 
-import numpy as np
-import torch
-
-from tfm_lens.evaluation.datasets import TABARENA_BINARY_TASK_IDS, load_tabarena_task
+from tfm_lens.evaluation.datasets import TABARENA_BINARY_TASK_IDS, load_task_record
 from tfm_lens.evaluation.layerwise import load_decoders
 from tfm_lens.evaluation.preprocess import (
     limix_preprocess,
@@ -74,36 +71,6 @@ def _parse_args():
     return p.parse_args()
 
 
-def _subsample(X, y, n):
-    """Take at most n rows (n <= 0 keeps all), seeded for reproducibility."""
-    if n <= 0 or n >= len(X):
-        return X, y
-    idx = np.random.RandomState(SEED).choice(len(X), n, replace=False)
-    return X[idx], y[idx]
-
-
-def _load_record(task_id, preprocess, args):
-    """Load -> subsample -> 0-index labels -> preprocess -> tensors for one task."""
-    X_train, y_train, X_test, y_test, cat_idx = load_tabarena_task(task_id)
-    X_train, y_train = _subsample(X_train, y_train, args.subsample_train)
-    X_test, y_test = _subsample(X_test, y_test, args.subsample_test)
-    # 0-index the labels: TabICL's one-hot y_encoder needs contiguous ints; harmless
-    # for LimiX since binary labels are already 0/1.
-    classes = np.unique(y_train)
-    y_train = np.searchsorted(classes, y_train)
-    y_test = np.searchsorted(classes, y_test)
-    X_train_p, X_test_p = preprocess(X_train, y_train, X_test, cat_idx)
-    return {
-        "Xtr": torch.tensor(X_train_p),
-        "ytr": torch.tensor(y_train).float(),
-        "Xte": torch.tensor(X_test_p),
-        "y_test": y_test,
-        "n_classes": len(classes),
-        "n_train": int(len(X_train)),
-        "n_test": int(len(X_test)),
-    }
-
-
 def main():
     args = _parse_args()
     if args.ablation == "resample" and args.donor != "table":
@@ -122,7 +89,9 @@ def main():
     records = {}
     for task_id in task_ids:
         try:
-            records[task_id] = _load_record(task_id, preprocess, args)
+            records[task_id] = load_task_record(
+                task_id, preprocess, args.subsample_train, args.subsample_test, SEED
+            )
         except Exception as exc:  # keep going so one bad table can't sink the run
             print(f"load task {task_id}: FAILED {type(exc).__name__}: {exc}", flush=True)
 

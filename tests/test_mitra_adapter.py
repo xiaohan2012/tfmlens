@@ -15,6 +15,9 @@ from tfm_lens.core.interventions import skip_layer
 from tfm_lens.core.logit_lens import logit_lens
 from tfm_lens.evaluation.layerwise import layerwise_auc, predict_layers
 
+# Loads a real checkpoint and runs it on CPU — minutes, not milliseconds.
+pytestmark = pytest.mark.real_model
+
 BATCH = 2  # a couple of tables; forward_frozen splits each into support/query
 
 

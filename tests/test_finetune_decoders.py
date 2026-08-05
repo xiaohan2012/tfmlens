@@ -76,6 +76,7 @@ class TestFinetuneDecoders:
     @pytest.mark.skipif(
         sys.platform == "darwin", reason="tree_scm/xgboost segfaults on macOS arm64"
     )
+    @pytest.mark.real_model
     def test_real_prior_end_to_end(self, tmp_path, limix_model):
         from tfm_lens.adapters.limix import LimixAdapter
 

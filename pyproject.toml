@@ -81,3 +81,8 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+# `real_model` = loads a real TFM checkpoint (HF download + CPU forward) — minutes.
+# Fast inner loop: `uv run pytest -m "not real_model"` (toy-adapter tests only).
+markers = [
+    "real_model: needs a real TFM checkpoint; slow (HF download + CPU forward)",
+]
