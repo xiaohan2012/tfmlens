@@ -25,6 +25,9 @@ from tfm_lens.evaluation.datasets import (  # noqa: E402
 from tfm_lens.evaluation.layerwise import layerwise_auc, predict_layers  # noqa: E402
 from tfm_lens.evaluation.preprocess import limix_preprocess  # noqa: E402
 
+# Loads a real checkpoint and runs it on CPU — minutes, not milliseconds.
+pytestmark = pytest.mark.real_model
+
 
 def test_eval_pipeline_end_to_end_on_real_table(limix_model):
     # exercises the whole eval pipeline on a real OpenML task
