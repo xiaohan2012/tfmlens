@@ -39,6 +39,10 @@ def native_final_logits(
     scatter uses. Wrap the call in a ``skip_layer`` / ``inject_delta`` context to read
     it under ablation.
     """
+    # predict_layers_logits wants one decoder per depth; here every depth is the one
+    # shared native decoder (the same instance repeated). Fine because we read only the
+    # final layer ([-1]) and the decoder is stateless — depths never diverge. Do NOT
+    # reuse this list to read *intermediate* depths expecting independent decoders.
     native = [adapter.decoder_template()] * (adapter.n_layers + 1)
     return predict_layers_logits(adapter, native, X_train, y_train, X_test, n_classes)[-1]
 

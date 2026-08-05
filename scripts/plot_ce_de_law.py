@@ -17,6 +17,10 @@ Self-repair at a layer ⟺ **both** high R² AND slope in (0,1). A layer with ti
 regression is *biased toward* a spurious positive law). So this is a generous test;
 failing it is robust. A coupling-free version needs the independent CE (Part 2).
 
+⚠️ margin: ``--agg`` reduces by median (median-of-medians, D1 convention), the per-row
+default by mean-over-rows → **different (non-commuting) estimators** (see layerwise_margin).
+Use ``--coord gt_logit`` for the exact aggregate == mean(per-row) correspondence.
+
     uv run --group viz python scripts/plot_ce_de_law.py --coord margin
     uv run --group viz python scripts/plot_ce_de_law.py --coord margin --agg --apex-scatter
 """

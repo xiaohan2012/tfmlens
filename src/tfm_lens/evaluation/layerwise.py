@@ -108,6 +108,12 @@ def layerwise_margin(logits: list[np.ndarray], y_test: np.ndarray) -> list[float
     (rank-based) stays flat. The median is a robust location — median margin > 0
     <=> most rows correct, tracking AUC instead of fighting it.
 
+    ⚠️ Because this reduces by **median**, a DE/TE effect built from aggregated margin is a
+    *drop of medians* and does NOT equal the reduced per-row margin effect (median does not
+    commute with subtraction). Only the mean-based ``gt_logit`` satisfies
+    aggregate == mean(per-row); the margin **aggregate** and **per-row** figures are
+    different (both valid) estimators — don't read them as the same statistic.
+
     Raises on multiclass: the 'max other' competitor drifts across runs -> not a fixed coordinate.
     """
     y_test = np.asarray(y_test)
