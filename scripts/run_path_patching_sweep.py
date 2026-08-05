@@ -1,6 +1,6 @@
 """Path-patching DE–TE sweep over the TabArena binary tasks (issue #44, Part 1).
 
-For each dataset: load -> (optional) subsample -> preprocess -> ``direct_total_effect``
+For each dataset: load -> (optional) subsample -> preprocess -> ``layer_effects``
 (per-layer DE and TE on the **native decoder**, same ruler) + ``native_final_auc``
 (the per-dataset normalizer). Dumped to JSON for ``plot_de_te_scatter.py`` (the
 Hydra Fig-2c analog).
@@ -10,8 +10,8 @@ TE = total effect (ablate-and-react). Ablation is **resample** (on-manifold); do
 are the other loaded tasks (leave-one-out). Unlike the tuned-decoder sweep, this reads
 only the model's own decoder — no ``weights/`` decoders needed.
 
-    uv run --group eval python scripts/run_direct_effect_sweep.py --model limix_2m
-    uv run --group eval python scripts/run_direct_effect_sweep.py --model mitra \
+    uv run --group eval python scripts/run_path_patching_sweep.py --model limix_2m
+    uv run --group eval python scripts/run_path_patching_sweep.py --model mitra \
         --device cuda --out out/de_mitra.json
 """
 
@@ -20,14 +20,14 @@ import json
 from pathlib import Path
 
 from tfm_lens.evaluation.datasets import TABARENA_BINARY_TASK_IDS, load_task_record
-from tfm_lens.evaluation.direct_effect import direct_total_effect
+from tfm_lens.evaluation.native_readout import native_final_auc
+from tfm_lens.evaluation.path_patching import layer_effects
 from tfm_lens.evaluation.preprocess import (
     limix_preprocess,
     mitra_preprocess,
     tabfm_preprocess,
     tabicl_preprocess,
 )
-from tfm_lens.evaluation.self_repair import native_final_auc
 from tfm_lens.finetune.__main__ import build_adapter
 
 SEED = 0
@@ -44,7 +44,7 @@ def _parse_args():
     p.add_argument("--model", choices=list(MODELS), default="limix_2m")
     p.add_argument("--subsample-train", type=int, default=500, help="max train rows; 0 = all")
     p.add_argument("--subsample-test", type=int, default=200, help="max test rows; 0 = all")
-    p.add_argument("--out", type=Path, default=Path("out/direct_effect.json"))
+    p.add_argument("--out", type=Path, default=Path("out/path_patching.json"))
     p.add_argument("--device", default="cpu", help="cpu or cuda (Mitra's full tables need cuda)")
     p.add_argument("--tasks", default=None, help="comma-separated task ids; default all 15")
     p.add_argument(
@@ -82,7 +82,7 @@ def main():
             donor_tables = [
                 (r["Xtr"], r["ytr"], r["Xte"]) for tid, r in records.items() if tid != task_id
             ]
-            effects = direct_total_effect(
+            effects = layer_effects(
                 adapter,
                 rec["Xtr"],
                 rec["ytr"],

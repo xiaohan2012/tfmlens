@@ -1,5 +1,5 @@
-"""Direct (DE) and total (TE) effect on the **final decoder** — path-patching
-method B (issue #44, Part 1).
+"""Path patching — direct (DE) and total (TE) effect on the **final decoder**
+(method B; issue #44, Part 1).
 
 Two rulers for the Hydra DE–TE scatter, both read through the *same* native decoder
 so they're comparable by construction (not per-layer fine-tuned decoders):
@@ -18,7 +18,7 @@ so they're comparable by construction (not per-layer fine-tuned decoders):
 
 - **TE(m) — total effect.** Downstream must react → one real forward per m
   (``inject_delta``), read the final layer through the same native decoder
-  (reuses ``self_repair.native_final_logits``).
+  (reuses ``native_readout.native_final_logits``).
 
 Ablation is **resample**: ``ã_m`` = a role-matched donor δ, metric averaged over
 donors (reusing the #35 machinery). Both effects are the **drop** ``clean − ablated``
@@ -31,15 +31,15 @@ import torch.nn as nn
 
 from tfm_lens.adapters.base import ModelAdapter
 from tfm_lens.core.capture import capture_layers
+from tfm_lens.core.donor_delta import build_donor_delta, donor_deltas, layer_deltas
 from tfm_lens.core.interventions import inject_delta
-from tfm_lens.core.resample_ablation import build_donor_delta, donor_deltas, layer_deltas
 from tfm_lens.evaluation.layerwise import (
     gt_logit,
     gt_logit_zscore_stats,
     layerwise_gt_logit,
     layerwise_margin,
 )
-from tfm_lens.evaluation.self_repair import native_final_logits
+from tfm_lens.evaluation.native_readout import native_final_logits
 from tfm_lens.utils import clone_residual
 
 # A residual stream: a Tensor, or a ``(support, query)`` pair for double-stream models.
@@ -130,7 +130,7 @@ def _mean_over_donors_rows(per_donor: list[dict[str, np.ndarray]]) -> dict[str, 
     return {k: np.mean([c[k] for c in per_donor], axis=0) for k in per_donor[0]}
 
 
-def direct_total_effect(
+def layer_effects(
     adapter: ModelAdapter,
     X_train: torch.Tensor,
     y_train: torch.Tensor,

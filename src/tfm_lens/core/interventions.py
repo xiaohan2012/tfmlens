@@ -33,7 +33,7 @@ def inject_delta(adapter, idx, donor_delta):
 
     ``donor_delta`` must match the layer's input-residual shape (a Tensor, or a
     per-stream tuple for double-stream models) — build it with
-    ``core.resample_ablation.build_donor_delta``. ``skip_layer`` is the special case δ:=0.
+    ``core.donor_delta.build_donor_delta``. ``skip_layer`` is the special case δ:=0.
     """
     layer = adapter.layers[idx]
     original = layer.forward

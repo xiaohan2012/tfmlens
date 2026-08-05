@@ -1,7 +1,7 @@
 """Mitra adapter — the vendored Tab2D as a ModelAdapter.
 
 Tab2D is a double-stream 4D model: each layer processes support (context) and
-query (test) separately and returns ``(support, query)``. self-repair reads the
+query (test) separately and returns ``(support, query)``. the ablation sweep reads the
 query stream. Loaded with the standard-attention path forced on (no flash), so
 the adapter maintains a single forward / residual layout.
 

@@ -1,6 +1,6 @@
-"""Plot the exp6 self-repair trajectories (paper Figure 8) from the sweep JSON.
+"""Plot the balef2026 Exp6 ablation trajectories (paper Figure 8) from the sweep JSON.
 
-Reads the sweep JSON (run_self_repair_sweep.py); per dataset normalize each
+Reads the sweep JSON (run_balef_exp6_sweep.py); per dataset normalize each
 trajectory for ``--metric`` (auc: / native final AUC floored 0.5; gt_logit:
 per-task z-score with the clean-baseline mu/sigma), then average across datasets.
 Draws:
@@ -11,7 +11,7 @@ Draws:
 
 Self-repair = a sharp drop right after the skipped layer that later layers recover.
 
-    uv run --group viz python scripts/plot_self_repair.py --metric gt_logit
+    uv run --group viz python scripts/plot_balef_exp6_trajectory.py --metric gt_logit
 """
 
 import argparse
@@ -37,8 +37,8 @@ _METRIC_YLABEL = {
 
 def _parse_args():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--in", dest="inp", type=Path, default=Path("out/self_repair.json"))
-    p.add_argument("--out", type=Path, default=Path("out/self_repair_fig8.png"))
+    p.add_argument("--in", dest="inp", type=Path, default=Path("out/balef_exp6.json"))
+    p.add_argument("--out", type=Path, default=Path("out/balef_exp6_fig8.png"))
     p.add_argument("--model", choices=list(_MODEL_LABELS), default="limix_2m", help="title label")
     p.add_argument("--metric", choices=list(_METRIC_YLABEL), default="auc", help="y-axis metric")
     return p.parse_args()
@@ -132,7 +132,7 @@ def main():
     if args.metric == "auc":
         ax.set_ylim(0.5, 1.0)  # fixed chance..perfect band; auto-zoom hides ceiling effects
     ax.set_title(
-        f"{_MODEL_LABELS[args.model]} self-repair · {args.metric} "
+        f"{_MODEL_LABELS[args.model]} ablation trajectory · {args.metric} "
         f"({len(results)} TabArena binary tasks)"
     )
     ax.legend(loc="lower right")

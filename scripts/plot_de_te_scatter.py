@@ -1,4 +1,4 @@
-"""D1 — the DE–TE scatter (Hydra Fig 2c analog), from ``run_direct_effect_sweep.py``.
+"""D1 — the DE–TE scatter (Hydra Fig 2c analog), from ``run_path_patching_sweep.py``.
 
 Each point = one (layer, dataset). Axes (both through the native decoder, same ruler):
 

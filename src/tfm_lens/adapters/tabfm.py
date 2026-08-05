@@ -1,7 +1,7 @@
 """TabFM adapter — the vendored PyTorch TabFM as a ModelAdapter.
 
 TabFM is single-stream 3D, like TabICL: ``forward`` runs the col/row embedding
-stages then the ICL transformer (``icl_predictor``); self-repair reads the ICL
+stages then the ICL transformer (``icl_predictor``); the ablation sweep reads the ICL
 stage. Everything maps onto the base contract with no core changes:
 
 - ``layers`` -> ``icl_predictor.tf_icl.blocks``

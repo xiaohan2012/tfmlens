@@ -9,7 +9,7 @@ import numpy as np
 import torch
 
 from tfm_lens.core.capture import capture_layers
-from tfm_lens.core.resample_ablation import build_donor_delta, donor_deltas, layer_deltas
+from tfm_lens.core.donor_delta import build_donor_delta, donor_deltas, layer_deltas
 from toys import ToyAdapter3D, ToyAdapter4D
 
 H = ToyAdapter3D.HIDDEN

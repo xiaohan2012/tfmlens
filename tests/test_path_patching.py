@@ -1,4 +1,4 @@
-"""Path-patching DE / TE (method B) — ``evaluation.direct_effect``.
+"""Path-patching DE / TE (method B) — ``evaluation.path_patching``.
 
 Headline invariant: the DE **arithmetic** ``patched_residual`` (``r_L − a_m + ã_m``,
 no per-layer forward) reproduces a real **frozen-downstream forward** (ablate m to
@@ -17,11 +17,11 @@ import torch
 import torch.nn as nn
 
 from tfm_lens.core.capture import capture_layers
+from tfm_lens.core.donor_delta import layer_deltas
 from tfm_lens.core.interventions import inject_delta
-from tfm_lens.core.resample_ablation import layer_deltas
-from tfm_lens.evaluation.direct_effect import (
-    direct_total_effect,
+from tfm_lens.evaluation.path_patching import (
     final_decoder_logits,
+    layer_effects,
     patched_residual,
 )
 from tfm_lens.utils import clone_residual
@@ -196,7 +196,7 @@ def test_resample_runs_with_shape_and_keys():
         (dtr, dytr, dte)
         for dtr, dytr, dte, _ in (_inputs((ToyAdapter3D.HIDDEN,), seed=s) for s in (2, 3, 4))
     ]
-    res = direct_total_effect(adapter, Xtr, ytr, Xte, y_test, 2, donor_tables, n_donors=3, seed=0)
+    res = layer_effects(adapter, Xtr, ytr, Xte, y_test, 2, donor_tables, n_donors=3, seed=0)
     for effect in ("de", "te"):
         assert set(res[effect]) == set(range(adapter.n_layers))
         for m in range(adapter.n_layers):
@@ -214,7 +214,7 @@ def test_per_row_shape_and_aggregate_consistency():
         (dtr, dytr, dte)
         for dtr, dytr, dte, _ in (_inputs((ToyAdapter3D.HIDDEN,), seed=s) for s in (2, 3, 4))
     ]
-    res = direct_total_effect(
+    res = layer_effects(
         adapter, Xtr, ytr, Xte, y_test, 2, donor_tables, n_donors=3, seed=0, per_row=True
     )
     n_test = Xte.shape[0]
@@ -235,4 +235,4 @@ def test_resample_needs_donor_tables():
     adapter = BinaryToy3D()
     Xtr, ytr, Xte, y_test = _inputs((ToyAdapter3D.HIDDEN,))
     with pytest.raises(ValueError, match="donor_tables"):
-        direct_total_effect(adapter, Xtr, ytr, Xte, y_test, 2, donor_tables=[])
+        layer_effects(adapter, Xtr, ytr, Xte, y_test, 2, donor_tables=[])

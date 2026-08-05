@@ -1,23 +1,24 @@
-"""V2 self-repair cross-check: does the *faithful* (resample) ablation independently
-show self-repair, and more stably than zero? (#35)
+"""Which ablation perturbs better — resample or zero? (#35, V2)
 
-V1 (``validate_resample_donor_health.py``) showed resample is on-manifold +
-norm-preserving. V2 reruns the self-repair sweep under **both** ablations and
-asks, on the decision **margin**:
+V1 (``check_donor_delta_health.py``) showed resample is on-manifold +
+norm-preserving. V2 reruns the Exp6 sweep under **both** ablations and compares
+them on the decision **margin**:
 
-- **Claim 1 — self-repair holds:** under resample each ablated layer dips
-  (immediate hit) then climbs back toward baseline -> a property of the model,
-  not an artifact of zero's off-manifold shock. Zero is shown **for reference**,
-  not ground truth.
-- **Claim 2 — stability:** resample perturbs *consistently* (small per-layer
+- **Same trajectory shape:** under resample each ablated layer still dips
+  (immediate hit) then climbs back toward baseline -> the dip-recover shape is a
+  property of the model, not an artifact of zero's off-manifold shock.
+- **Stability (the criterion):** resample perturbs *consistently* (small per-layer
   spread, no overshoot); zero, off-manifold, occasionally sends the readout off
   (big swings + overshoots = ablation makes the margin *better* than baseline).
 
-We deliberately do **not** frame this as "resample reproduces zero" — resample is
-the better method that happens to land on the same self-repair, so no zero-vs-
-resample correlation stat.
+Zero is shown **for reference, not as ground truth** — so there is deliberately no
+zero-vs-resample correlation stat. The question is which intervention to trust.
 
-Inputs: ``out/v2_{model}_{zero,resample}.json`` (``run_self_repair_sweep.py``
+⚠️ ``recovery`` below is **not** the compensation effect CE. ``imm`` is a mid-depth
+*tuned-probe* reading, not the frozen-downstream DE, so ``imm - TE`` cannot identify
+self-repair (#45). It is kept as a shape descriptor only.
+
+Inputs: ``out/v2_{model}_{zero,resample}.json`` (``run_balef_exp6_sweep.py``
 with ``--ablation zero|resample``). Each stores baseline + per-ablated-layer
 trajectories under ``sweep["skip"]`` (the generic *ablated* condition, whatever
 the ablation) for metrics {auc, gt_logit, margin}.
@@ -26,7 +27,7 @@ Per ablated layer ``m`` (metric-normalized, averaged over tasks):
 
 - **immediate** ``imm(m) = baseline[m+1] - ablated_m[m+1]`` — the direct hit.
 - **total** ``TE(m) = baseline[-1] - ablated_m[-1]`` — what survives to the final layer.
-- **self-repair** ``SR(m) = imm(m) - TE(m)`` — recovered downstream.
+- **recovery** ``rec(m) = imm(m) - TE(m)`` — how much of the immediate hit is gone by the end.
 
 Figures:
 
@@ -34,7 +35,7 @@ Figures:
 - ``v2_pair_gtlogit_{model}.png``  same, gt_logit (off-manifold blow-up in raw-logit space).
 - ``v2_stability.png``             per-layer std(imm) + overshoot count, all models.
 
-    uv run --group viz python scripts/validate_resample_self_repair.py \
+    uv run --group viz python scripts/compare_ablation_stability.py \
         --models limix_2m mitra tabicl_v2 tabfm --in-dir out
 """
 
@@ -154,7 +155,7 @@ def _pair_fig(in_dir, model, metric, out):
     _draw_panel(axes[0], zb, zs, "zero (reference)", metric, ylim)
     _draw_panel(axes[1], rb, rs, "resample (faithful)", metric, ylim)
     axes[0].set_ylabel(_METRIC_YLABEL[metric])
-    fig.suptitle(f"{_MODEL_LABELS[model]} · self-repair · {metric}", fontweight="bold")
+    fig.suptitle(f"{_MODEL_LABELS[model]} · ablation trajectory · {metric}", fontweight="bold")
     fig.savefig(out, dpi=140)
     plt.close(fig)
     print(f"wrote {out}")
@@ -222,7 +223,7 @@ def main():
     args = _parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Claim 1 — self-repair holds (margin), plus the gt_logit off-manifold view.
+    # Trajectory shape (margin), plus the gt_logit off-manifold view.
     for model in args.models:
         _pair_fig(args.in_dir, model, "margin", args.out_dir / f"v2_pair_{model}.png")
         _pair_fig(args.in_dir, model, "gt_logit", args.out_dir / f"v2_pair_gtlogit_{model}.png")
