@@ -18,18 +18,12 @@ Per model, rows pooled over layers/tasks, z-scored per task by the clean-row spr
 """
 
 import argparse
-import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from _de_te_common import MODEL_LABELS, de_scale, load_de_json
 
-_MODEL_LABELS = {
-    "limix_2m": "LimiX-2M",
-    "tabicl_v2": "TabICLv2",
-    "mitra": "Mitra",
-    "tabfm": "TabFM",
-}
 _REDUNDANT_TOL = 0.1  # |DE| below this (σ units) = redundant stripe, excluded from CE stats
 
 
@@ -47,13 +41,6 @@ def _parse_args():
     return p.parse_args()
 
 
-def _task_scale(eff, coord):
-    """Per-task z-score unit = spread of the clean per-row coordinate."""
-    if coord == "gt_logit":
-        return max(eff["zscore"]["sigma"], 1e-6)
-    return max(float(np.std(eff["clean_rows"]["margin"])), 1e-6)
-
-
 def _points(results, coord):
     """Pool per-row (DE, TE) over all (task, layer), each z-scored by its clean-row spread."""
     de, te = [], []
@@ -61,7 +48,7 @@ def _points(results, coord):
         eff = r["effects"]
         if "de_rows" not in eff:
             raise SystemExit("json has no de_rows — re-run the sweep with --per-row")
-        scale = _task_scale(eff, coord)
+        scale = de_scale(eff, coord)
         for m_str, d in eff["de_rows"].items():
             de.append(np.asarray(d[coord]) / scale)
             te.append(np.asarray(eff["te_rows"][m_str][coord]) / scale)
@@ -114,15 +101,7 @@ def _summary(de, te):
 
 def main():
     args = _parse_args()
-    loaded = {}
-    for m in args.models:
-        p = args.in_dir / f"de_{m}.json"
-        if p.exists():
-            loaded[m] = json.loads(p.read_text())
-        else:
-            print(f"skip {m}: {p} not found")
-    if not loaded:
-        raise SystemExit("no input files (expected in-dir/de_<model>.json with --per-row)")
+    loaded = load_de_json(args.in_dir, args.models)
 
     n = len(loaded)
     nrow = 1 if args.hist_only else 2
@@ -134,9 +113,9 @@ def main():
         de, te = _points(res, args.coord)
         if args.hist_only:
             _draw_ce_hist(axes[0][j], de, te)
-            axes[0][j].set_title(_MODEL_LABELS.get(m, m), fontsize=11)
+            axes[0][j].set_title(MODEL_LABELS.get(m, m), fontsize=11)
         else:
-            _draw_hexbin(axes[0][j], de, te, _MODEL_LABELS.get(m, m))
+            _draw_hexbin(axes[0][j], de, te, MODEL_LABELS.get(m, m))
             _draw_ce_hist(axes[1][j], de, te)
         print(f"  {m:10s}  {_summary(de, te)}")
     if not args.hist_only:

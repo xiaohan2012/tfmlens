@@ -26,18 +26,12 @@ Use ``--coord gt_logit`` for the exact aggregate == mean(per-row) correspondence
 """
 
 import argparse
-import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from _de_te_common import MODEL_LABELS, de_scale, load_de_json
 
-_MODEL_LABELS = {
-    "limix_2m": "LimiX-2M",
-    "tabicl_v2": "TabICLv2",
-    "mitra": "Mitra",
-    "tabfm": "TabFM",
-}
 _DE_SPREAD_MIN = 0.1  # σ; below this a layer has no DE variation → slope not meaningful
 
 
@@ -60,12 +54,9 @@ def _parse_args():
     return p.parse_args()
 
 
-def _scale(eff, coord, agg=False):
-    if coord == "gt_logit":
-        return max(eff["zscore"]["sigma"], 1e-6)
-    if agg:  # match D1 aggregate scatter
-        return max(abs(eff["clean"]["margin"]), 1e-6)
-    return max(float(np.std(eff["clean_rows"]["margin"])), 1e-6)
+def _meaningful(spread):
+    """Layers with real DE variation (slope/R² are meaningful only there)."""
+    return spread >= _DE_SPREAD_MIN
 
 
 def _n_layers(results):
@@ -78,7 +69,7 @@ def _layer_pts(results, L, coord, agg=False):
     de, ce = [], []
     for r in results.values():
         eff = r["effects"]
-        s = _scale(eff, coord, agg)
+        s = de_scale(eff, coord, agg=agg)
         if agg:
             d = np.array([eff["de"][str(L)][coord] / s])
             t = np.array([eff["te"][str(L)][coord] / s])
@@ -113,15 +104,16 @@ def _layer_curve(results, coord, agg=False):
     return np.array(slope), np.array(r2), np.array(spread)
 
 
-def _apex_layer(results, coord, agg=False):
+def _apex_from_curve(r2, spread):
     """Peak-R² layer among those with meaningful DE spread, final layer excluded
-    (no downstream ⇒ CE≡0). Hydra's Fig-4b apex criterion. -1 if none."""
-    slope, r2, spread = _layer_curve(results, coord, agg)
+    (no downstream ⇒ CE≡0). Hydra's Fig-4b apex criterion. -1 if none.
+
+    Pure over the already-computed curve arrays — no re-fit."""
     cand = r2.copy()
-    cand[spread < _DE_SPREAD_MIN] = -np.inf
+    cand[~_meaningful(spread)] = -np.inf
     cand[-1] = -np.inf  # final layer has no downstream
     cand[~np.isfinite(cand)] = -np.inf
-    return int(np.argmax(cand)) if np.isfinite(cand).any() and cand.max() > -np.inf else -1
+    return int(np.argmax(cand)) if cand.max() > -np.inf else -1
 
 
 def _draw_apex_scatter(ax, de, ce, m, b, r2, title, agg):
@@ -149,15 +141,7 @@ def _draw_apex_scatter(ax, de, ce, m, b, r2, title, agg):
 
 def main():
     args = _parse_args()
-    loaded = {}
-    for m in args.models:
-        p = args.in_dir / f"de_{m}.json"
-        if p.exists():
-            loaded[m] = json.loads(p.read_text())
-        else:
-            print(f"skip {m}: {p} not found")
-    if not loaded:
-        raise SystemExit("no input files (expected in-dir/de_<model>.json with --per-row)")
+    loaded = load_de_json(args.in_dir, args.models)
 
     if args.apex_scatter:
         _main_apex_scatter(loaded, args)
@@ -169,8 +153,8 @@ def main():
     for j, (m, res) in enumerate(loaded.items()):
         slope, r2, spread = _layer_curve(res, args.coord, args.agg)
         L = np.arange(len(slope))
-        solid = spread >= _DE_SPREAD_MIN  # meaningful DE variation
-        apex = _apex_layer(res, args.coord, args.agg)
+        solid = _meaningful(spread)
+        apex = _apex_from_curve(r2, spread)
         print(
             f"  {m:10s} apex L{apex}: R²={r2[apex]:.2f} slope={slope[apex]:+.2f}"
             if apex >= 0
@@ -182,7 +166,7 @@ def main():
         ax_r.plot(L[solid], r2[solid], "o-", color="tab:blue", ms=4)
         ax_r.plot(L[~solid], r2[~solid], "o", mfc="white", mec="tab:blue", ms=4)
         ax_r.set_ylim(-0.05, 1.0)
-        ax_r.set_title(_MODEL_LABELS.get(m, m), fontsize=11)
+        ax_r.set_title(MODEL_LABELS.get(m, m), fontsize=11)
         if apex >= 0:
             ax_r.axvline(apex, color="0.7", lw=0.8, zorder=0)
 
@@ -224,12 +208,13 @@ def _main_apex_scatter(loaded, args):
     )
     print(f"\napex-layer DE vs CE fit ({args.coord}):")
     for ax, (m, res) in zip([a for row in axes for a in row], loaded.items(), strict=False):
-        L = _apex_layer(res, args.coord, args.agg)
+        _, r2_curve, spread = _layer_curve(res, args.coord, args.agg)
+        L = _apex_from_curve(r2_curve, spread)
         de, ce = _layer_pts(res, L, args.coord, args.agg)
         slope, b, r2 = _fit(de, ce)
         print(f"  {m:10s} apex L{L}: slope={slope:+.2f} R²={r2:.2f} (n={len(de)})")
         _draw_apex_scatter(
-            ax, de, ce, slope, b, r2, f"{_MODEL_LABELS.get(m, m)} · apex L{L} (peak R²)", args.agg
+            ax, de, ce, slope, b, r2, f"{MODEL_LABELS.get(m, m)} · apex L{L} (peak R²)", args.agg
         )
     for ax in [a for row in axes for a in row][n:]:
         ax.axis("off")

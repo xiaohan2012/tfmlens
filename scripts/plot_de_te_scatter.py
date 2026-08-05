@@ -17,18 +17,12 @@ tasks/models pool. Diagonal ``y = x`` = no compensation (TE = DE).
 """
 
 import argparse
-import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from _de_te_common import MODEL_LABELS, de_scale, load_de_json
 
-_MODEL_LABELS = {
-    "limix_2m": "LimiX-2M",
-    "tabicl_v2": "TabICLv2",
-    "mitra": "Mitra",
-    "tabfm": "TabFM",
-}
 # |DE| below this (σ units) is treated as the redundant stripe — flagged, not counted.
 _REDUNDANT_TOL = 0.1
 
@@ -48,8 +42,7 @@ def _points(results, coord):
     de, te, layer = [], [], []
     for r in results.values():
         eff = r["effects"]
-        sigma = eff["zscore"]["sigma"] if coord == "gt_logit" else abs(eff["clean"]["margin"])
-        scale = max(sigma, 1e-6)
+        scale = de_scale(eff, coord, agg=True)
         for m_str, d in eff["de"].items():
             t = eff["te"][m_str]
             de.append(d[coord] / scale)
@@ -89,15 +82,7 @@ def _summary(de, te, layer):
 
 def main():
     args = _parse_args()
-    loaded = {}
-    for model in args.models:
-        path = args.in_dir / f"de_{model}.json"
-        if path.exists():
-            loaded[model] = json.loads(path.read_text())
-        else:
-            print(f"skip {model}: {path} not found")
-    if not loaded:
-        raise SystemExit("no input files found (expected in-dir/de_<model>.json)")
+    loaded = load_de_json(args.in_dir, args.models)
 
     fig, axes = plt.subplots(
         1, len(loaded), figsize=(4.6 * len(loaded), 4.8), squeeze=False, constrained_layout=True
@@ -106,7 +91,7 @@ def main():
     sc = None
     for ax, (model, results) in zip(axes[0], loaded.items(), strict=True):
         de, te, layer = _points(results, args.coord)
-        sc = _draw(ax, de, te, layer, _MODEL_LABELS.get(model, model))
+        sc = _draw(ax, de, te, layer, MODEL_LABELS.get(model, model))
         print(f"  {model:10s}  {_summary(de, te, layer)}")
     axes[0][0].set_ylabel("TE  (total effect, ablate-and-react)")
     fig.colorbar(sc, ax=axes[0], label="layer", shrink=0.8)
