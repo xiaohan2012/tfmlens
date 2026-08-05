@@ -40,7 +40,7 @@ def _parse_args():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--models", nargs="+", default=["limix_2m", "mitra", "tabicl_v2", "tabfm"])
     p.add_argument("--in-dir", type=Path, default=Path("out"))
-    p.add_argument("--out", type=Path, default=Path("out/ce_de_law.png"))
+    p.add_argument("--out", type=Path, default=Path("out/compensation_fit.png"))
     p.add_argument("--coord", choices=["gt_logit", "margin"], default="margin")
     p.add_argument(
         "--agg",

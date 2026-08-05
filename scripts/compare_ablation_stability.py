@@ -14,20 +14,16 @@ them on the decision **margin**:
 Zero is shown **for reference, not as ground truth** — so there is deliberately no
 zero-vs-resample correlation stat. The question is which intervention to trust.
 
-⚠️ ``recovery`` below is **not** the compensation effect CE. ``imm`` is a mid-depth
-*tuned-probe* reading, not the frozen-downstream DE, so ``imm - TE`` cannot identify
-self-repair (#45). It is kept as a shape descriptor only.
-
 Inputs: ``out/v2_{model}_{zero,resample}.json`` (``run_balef_exp6_sweep.py``
 with ``--ablation zero|resample``). Each stores baseline + per-ablated-layer
 trajectories under ``sweep["skip"]`` (the generic *ablated* condition, whatever
 the ablation) for metrics {auc, gt_logit, margin}.
 
-Per ablated layer ``m`` (metric-normalized, averaged over tasks):
+The only quantity scored, per ablated layer ``m`` (metric-normalized, averaged over tasks):
 
-- **immediate** ``imm(m) = baseline[m+1] - ablated_m[m+1]`` — the direct hit.
-- **total** ``TE(m) = baseline[-1] - ablated_m[-1]`` — what survives to the final layer.
-- **recovery** ``rec(m) = imm(m) - TE(m)`` — how much of the immediate hit is gone by the end.
+- **immediate** ``imm(m) = baseline[m+1] - ablated_m[m+1]`` — the direct hit at depth m+1.
+
+Its per-layer spread and overshoot count are what rank the two ablations.
 
 Figures:
 

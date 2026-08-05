@@ -9,7 +9,8 @@ Draws:
 - one colored line per ablated layer m, from depth m+1 onward (post-skip).
 - a dashed red-x connector marking the immediate drop at depth m+1.
 
-Self-repair = a sharp drop right after the skipped layer that later layers recover.
+The dip-then-recover shape the paper reads as self-repair — equally the signature of
+passive redundancy; separating the two needs the frozen-downstream DE (``path_patching``).
 
     uv run --group viz python scripts/plot_balef_exp6_trajectory.py --metric gt_logit
 """
