@@ -23,3 +23,9 @@ McGrath et al.; Fig 5 and 6 come from the Exp6 sweep figures of #39; Fig 13, 14,
 To update the article, regenerate and copy across:
 
     cp out/article-figures/*.png ../xiaohan2012.github.io/assets/img/tfm-self-repair/
+
+The repo README's hero figure is not produced here — it is the single-panel
+form of Fig 11, rendered straight from the library script:
+
+    uv run --group viz python scripts/plot_de_te_scatter.py \
+        --models limix_2m --coord margin --out docs/figures/de-te-limix.png
